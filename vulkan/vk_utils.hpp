@@ -15,7 +15,7 @@ namespace keplar
         if (_vk_result != VK_SUCCESS) \
         { \
             keplar::Logger::getInstance().enqueueLog( \
-                keplar::Logger::Level::Error, __FILE__, __LINE__, \
+                keplar::Logger::Level::Fatal, __FILE__, __LINE__, \
                 "%s failed with error %s [code: %d]", #call, string_VkResult(_vk_result), _vk_result); \
             return false; \
         } \

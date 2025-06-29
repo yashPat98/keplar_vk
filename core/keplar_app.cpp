@@ -8,7 +8,7 @@
 
 namespace keplar
 {
-    constexpr const char* kAppName = "keplar_vk";
+    constexpr const char* kWindowTitle = "keplar_vk";
     constexpr int kDefaultWidth = 1280;
     constexpr int kDefaultHeight = 720;
 }
@@ -28,7 +28,7 @@ namespace keplar
             return false;
         }
 
-        if (!m_platform->initialize(kAppName, kDefaultWidth, kDefaultHeight))
+        if (!m_platform->initialize(kWindowTitle, kDefaultWidth, kDefaultHeight))
         {
             VK_LOG_FATAL("failed to initialize platform");
             return false;
