@@ -23,3 +23,13 @@
 #else 
     constexpr bool kEnableValidationLayers = false;
 #endif
+
+namespace keplar 
+{
+    // vulkan configuration constants
+    constexpr const char* kApplicationName     = "keplar_vk";
+    constexpr uint32_t    kApplicationVersion  = VK_MAKE_VERSION(1, 0, 0);
+    constexpr const char* kEngineName          = "keplar_vk";
+    constexpr uint32_t    kEngineVersion       = VK_MAKE_VERSION(1, 0, 0);
+    constexpr uint32_t    kVulkanApiVersion    = VK_API_VERSION_1_4;
+}  // namespace keplar
