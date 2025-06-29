@@ -22,8 +22,15 @@
         } \
     } while (0)
 
-#define VK_LOG_TRACE(fmt, ...) VK_LOG(Trace, fmt, ##__VA_ARGS__)
-#define VK_LOG_DEBUG(fmt, ...) VK_LOG(Debug, fmt, ##__VA_ARGS__)
+// zero runtime overhead for debug and trace logs in release builds
+#ifndef NDEBUG
+    #define VK_LOG_TRACE(fmt, ...) VK_LOG(Trace, fmt, ##__VA_ARGS__)
+    #define VK_LOG_DEBUG(fmt, ...) VK_LOG(Debug, fmt, ##__VA_ARGS__)
+#else
+    #define VK_LOG_TRACE(fmt, ...) ((void)0)
+    #define VK_LOG_DEBUG(fmt, ...) ((void)0)
+#endif
+
 #define VK_LOG_INFO(fmt, ...)  VK_LOG(Info,  fmt, ##__VA_ARGS__)
 #define VK_LOG_WARN(fmt, ...)  VK_LOG(Warn,  fmt, ##__VA_ARGS__)
 #define VK_LOG_ERROR(fmt, ...) VK_LOG(Error, fmt, ##__VA_ARGS__)

@@ -30,6 +30,13 @@ namespace keplar
         {
             std::cerr << "Logger: failed to open log file: " << m_filename << std::endl;
         }
+
+        // disable Debug/Trace in release builds
+        #ifndef NDEBUG
+            m_enabledLevels = { Level::Trace, Level::Debug, Level::Info, Level::Warn, Level::Error, Level::Fatal };
+        #else
+            m_enabledLevels = { Level::Info, Level::Warn, Level::Error, Level::Fatal };
+        #endif
     }
 
     Logger::~Logger()
