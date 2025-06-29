@@ -5,6 +5,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include "vulkan/vk_config.hpp"
 
 namespace keplar
@@ -20,6 +21,7 @@ namespace keplar
             virtual void shutdown() = 0;
             
             virtual VkSurfaceKHR createVulkanSurface(VkInstance vkInstance) const = 0;
+            virtual std::vector<const char*> getSurfaceInstanceExtensions() const = 0;
             virtual void* getNativeWindowHandle() const = 0;
             virtual uint32_t getWindowWidth() const = 0;
             virtual uint32_t getWindowHeight() const = 0;

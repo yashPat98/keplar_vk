@@ -86,7 +86,7 @@ namespace keplar
 
     void Win32Platform::pollEvents() 
     {
-        MSG msg{};
+        MSG msg {};
         while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) 
         {
             TranslateMessage(&msg);
@@ -120,13 +120,18 @@ namespace keplar
 
         VkWin32SurfaceCreateInfoKHR vkWin32SurfaceCreateInfoKHR {};
         vkWin32SurfaceCreateInfoKHR.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;        
-        vkWin32SurfaceCreateInfoKHR.pNext = NULL;                                                   
+        vkWin32SurfaceCreateInfoKHR.pNext = nullptr;                                                   
         vkWin32SurfaceCreateInfoKHR.flags = 0;                                                      
         vkWin32SurfaceCreateInfoKHR.hinstance = m_hInstance; 
         vkWin32SurfaceCreateInfoKHR.hwnd = m_hwnd;                                                   
 
-        VK_CHECK(vkCreateWin32SurfaceKHR(vkInstance, &vkWin32SurfaceCreateInfoKHR, NULL, &vkSurfaceKHR));
+        VK_CHECK(vkCreateWin32SurfaceKHR(vkInstance, &vkWin32SurfaceCreateInfoKHR, nullptr, &vkSurfaceKHR));
         return vkSurfaceKHR;
+    }
+
+    std::vector<const char*> Win32Platform::getSurfaceInstanceExtensions() const 
+    {
+        return { VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME };
     }
 
     void* Win32Platform::getNativeWindowHandle() const 
