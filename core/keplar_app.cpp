@@ -16,21 +16,41 @@ namespace keplar
 namespace keplar
 {
     KeplarApp::KeplarApp()
+        : m_vulkanContext(std::make_unique<VulkanContext>())
     {
     }
 
     bool KeplarApp::initialize()
     {
-        m_platform = createPlatform();
+        // create a platform-specific implementation using a factory function.
+        m_platform = platform::createPlatform();
         if (!m_platform)
         {
             VK_LOG_FATAL("failed to create platform instance");
             return false;
         }
 
+        // initialize the platform window and system resources
         if (!m_platform->initialize(kWindowTitle, kDefaultWidth, kDefaultHeight))
         {
-            VK_LOG_FATAL("failed to initialize platform");
+            return false;
+        }
+
+        // set up required vulkan instance extensions and validation layers 
+        VulkanContextConfig vulkanContextConfig {};
+        vulkanContextConfig.mExtensions = m_platform->getSurfaceInstanceExtensions();
+    
+        if (kEnableValidationLayers) 
+        {
+            // add debug extension and validation layers
+            vulkanContextConfig.mExtensions.emplace_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+            vulkanContextConfig.mValidationLayers.emplace_back("VK_LAYER_KHRONOS_validation");
+        }
+
+        // create and initialize vulkan context with above config 
+        m_vulkanContext = std::make_unique<VulkanContext>();
+        if (!m_vulkanContext->initialize(*m_platform, vulkanContextConfig))
+        {
             return false;
         }
 
@@ -48,6 +68,12 @@ namespace keplar
 
     void KeplarApp::shutdown()
     {
+        // destroy in reverse order for safe cleanup
+        if (m_vulkanContext)
+        {
+            m_vulkanContext->destroy();
+        }
+
         if (m_platform)
         {
             m_platform->shutdown();

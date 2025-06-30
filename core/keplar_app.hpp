@@ -6,6 +6,7 @@
 
 #include <memory>
 #include "platform/platform.hpp"
+#include "vulkan/vulkan_context.hpp"
 
 namespace keplar
 {
@@ -15,7 +16,7 @@ namespace keplar
             KeplarApp();
             ~KeplarApp() = default;
 
-            // disable copy and move semantics
+            // disable copy and move
             KeplarApp(const KeplarApp&) = delete;
             KeplarApp& operator=(const KeplarApp&) = delete;
             KeplarApp(KeplarApp&&) = delete;
@@ -28,5 +29,6 @@ namespace keplar
 
         private:
             std::unique_ptr<Platform> m_platform;
+            std::unique_ptr<VulkanContext> m_vulkanContext;
     };
 }   // namespace keplar

@@ -12,7 +12,7 @@
 #error "Unsupported platform"
 #endif
 
-namespace keplar
+namespace keplar::platform
 {
     // factory function that returns the platform-specific instance
     std::unique_ptr<Platform> createPlatform()

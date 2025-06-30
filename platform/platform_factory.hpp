@@ -7,7 +7,7 @@
 #include <memory>
 #include "platform.hpp"
 
-namespace keplar
+namespace keplar::platform
 {
     std::unique_ptr<Platform> createPlatform();
 }   // namespace keplar
