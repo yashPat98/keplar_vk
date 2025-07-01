@@ -12,30 +12,60 @@
 
 namespace keplar
 {
-    struct VulkanContextConfig
-    {
-        std::vector<const char*> mExtensions;
-        std::vector<const char*> mValidationLayers;
-    };
-
     class VulkanContext
     {
         public: 
-            VulkanContext();
+            class Builder;
             virtual ~VulkanContext();
 
-            // non-copyable & non-movable
+            // disable copy and move semantics to enforce unique ownership
             VulkanContext(const VulkanContext&) = delete;
             VulkanContext& operator=(const VulkanContext&) = delete;
             VulkanContext(VulkanContext&&) noexcept = delete;
             VulkanContext& operator=(VulkanContext&&) noexcept = delete;
 
-            // manage lifecycle
-            bool initialize(const Platform& platform, const VulkanContextConfig& config);
+            // explicit resource cleanup
             void destroy();
+
+        private:
+            // only accessible by builder for controlled construction and initialization
+            VulkanContext();
+            bool initialize(const Platform& platform, const VulkanContextConfig& config);
 
         private:
             std::unique_ptr<VulkanInstance> m_vulkanInstance;
             std::unique_ptr<VulkanSurface> m_vulkanSurface;
+    };
+
+    class VulkanContext::Builder
+    {
+        public:
+            Builder() = default;
+
+            // disable copy and move to avoid dangling references
+            Builder(const Builder&) = delete;
+            Builder& operator=(const Builder&) = delete;
+            Builder(Builder&&) = delete;
+            Builder& operator=(Builder&&) = delete;
+
+            // core vulkan configuration
+            Builder& withPlatform(const Platform& platform);
+            Builder& withInstanceExtensions(const std::vector<const char*>& extensions);
+            Builder& withValidationLayers(const std::vector<const char*>& validationLayers);
+            Builder& enableValidation(bool enable);
+
+            // application info overrides
+            Builder& withApplicationName(std::string_view appName);
+            Builder& withApplicationVersion(uint32_t appVersion);
+            Builder& withEngineName(std::string_view engineName);
+            Builder& withEngineVersion(uint32_t engineVersion);
+            Builder& withApiVersion(uint32_t apiVersion);
+
+            // builds vulkan context based on provided configuration
+            std::unique_ptr<VulkanContext> build();
+
+        private:
+            const Platform* m_platform;
+            VulkanContextConfig m_vulkanContextConfig;
     };
 }   // namespace keplar

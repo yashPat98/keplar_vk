@@ -8,15 +8,16 @@
 
 namespace keplar
 {
-    constexpr const char* kWindowTitle = "keplar_vk";
-    constexpr int kDefaultWidth = 1280;
-    constexpr int kDefaultHeight = 720;
+    inline constexpr const char* kWindowTitle = "keplar_vk";
+    inline constexpr int kDefaultWidth = 1280;
+    inline constexpr int kDefaultHeight = 720;
 }
 
 namespace keplar
 {
     KeplarApp::KeplarApp()
-        : m_vulkanContext(std::make_unique<VulkanContext>())
+        : m_platform(nullptr)
+        , m_vulkanContext(nullptr)
     {
     }
 
@@ -36,20 +37,12 @@ namespace keplar
             return false;
         }
 
-        // set up required vulkan instance extensions and validation layers 
-        VulkanContextConfig vulkanContextConfig {};
-        vulkanContextConfig.mExtensions = m_platform->getSurfaceInstanceExtensions();
-    
-        if (kEnableValidationLayers) 
-        {
-            // add debug extension and validation layers
-            vulkanContextConfig.mExtensions.emplace_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
-            vulkanContextConfig.mValidationLayers.emplace_back("VK_LAYER_KHRONOS_validation");
-        }
-
-        // create and initialize vulkan context with above config 
-        m_vulkanContext = std::make_unique<VulkanContext>();
-        if (!m_vulkanContext->initialize(*m_platform, vulkanContextConfig))
+        // create vulkan context using the builder pattern 
+        m_vulkanContext = VulkanContext::Builder::Builder()
+                            .withPlatform(*m_platform)
+                            .build();
+                            
+        if (!m_vulkanContext)
         {
             return false;
         }

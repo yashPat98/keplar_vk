@@ -22,7 +22,7 @@ namespace keplar
             VulkanInstance& operator=(VulkanInstance&&) = delete;
 
             // not thread-safe
-            bool initialize(const std::vector<const char*>& extensions, const std::vector<const char*>& validationLayers);
+            bool initialize(const VulkanContextConfig& config);
             void destroy();
 
             // thread-safe

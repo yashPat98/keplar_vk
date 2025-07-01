@@ -19,19 +19,19 @@ namespace keplar
         destroy();
     }
 
-    bool VulkanInstance::initialize(const std::vector<const char*>& extensions, const std::vector<const char*>& validationLayers)
+    bool VulkanInstance::initialize(const VulkanContextConfig& config)
     {
         // set extensions to be enabled
-        if (!validateAndSetExtensions(extensions))
+        if (!validateAndSetExtensions(config.mExtensions))
         {
             VK_LOG_ERROR("validateAndSetExtensions failed");
             return false;
         }
 
         // set validation layers to be enabled
-        if constexpr (kEnableValidationLayers)
+        if (config.mEnableValidation)
         {
-            if (!validateAndSetValidationLayers(validationLayers))
+            if (!validateAndSetValidationLayers(config.mValidationLayers))
             {
                 VK_LOG_ERROR("validateAndSetValidationLayers failed");
                 return false;
@@ -42,11 +42,11 @@ namespace keplar
         VkApplicationInfo vkApplicationInfo {};
         vkApplicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         vkApplicationInfo.pNext = nullptr;
-        vkApplicationInfo.pApplicationName = kApplicationName;
-        vkApplicationInfo.applicationVersion = kApplicationVersion;
-        vkApplicationInfo.pEngineName = kEngineName;
-        vkApplicationInfo.engineVersion = kEngineVersion;
-        vkApplicationInfo.apiVersion = kVulkanApiVersion;
+        vkApplicationInfo.pApplicationName = config.mApplicationName.data();
+        vkApplicationInfo.applicationVersion = config.mApplicationVersion;
+        vkApplicationInfo.pEngineName = config.mEngineName.data();
+        vkApplicationInfo.engineVersion = config.mEngineVersion;
+        vkApplicationInfo.apiVersion = config.mApiVersion;
 
         // set up vulkan instance create info
         VkInstanceCreateInfo vkInstanceCreateInfo {};
@@ -57,7 +57,7 @@ namespace keplar
         vkInstanceCreateInfo.ppEnabledExtensionNames = m_enabledExtensions.data();
 
         // set validation layers if enabled
-        if constexpr (kEnableValidationLayers)
+        if (config.mEnableValidation)
         {
             vkInstanceCreateInfo.enabledLayerCount = static_cast<uint32_t>(m_enabledValidationLayers.size());
             vkInstanceCreateInfo.ppEnabledLayerNames = m_enabledValidationLayers.data();

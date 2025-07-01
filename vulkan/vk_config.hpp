@@ -17,19 +17,34 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
 
-// enable validation layers in debug builds
-#ifndef NDEBUG
-    constexpr bool kEnableValidationLayers = true;
-#else 
-    constexpr bool kEnableValidationLayers = false;
-#endif
-
 namespace keplar 
 {
-    // vulkan configuration constants
-    constexpr const char* kApplicationName     = "keplar_vk";
-    constexpr uint32_t    kApplicationVersion  = VK_MAKE_VERSION(1, 0, 0);
-    constexpr const char* kEngineName          = "keplar_vk";
-    constexpr uint32_t    kEngineVersion       = VK_MAKE_VERSION(1, 0, 0);
-    constexpr uint32_t    kVulkanApiVersion    = VK_API_VERSION_1_4;
+    // default configuration constants
+    inline constexpr std::string_view kDefaultApplicationName    = "keplar_vk";
+    inline constexpr uint32_t         kDefaultApplicationVersion = VK_MAKE_VERSION(1, 0, 0);
+    inline constexpr std::string_view kDefaultEngineName         = "keplar_vk";
+    inline constexpr uint32_t         kDefaultEngineVersion      = VK_MAKE_VERSION(1, 0, 0);
+    inline constexpr uint32_t         kDefaultVulkanApiVersion   = VK_API_VERSION_1_4;
+
+    // vulkan configuration structure
+    struct VulkanContextConfig
+    {
+        // application info
+        std::string_view mApplicationName    = kDefaultApplicationName;
+        uint32_t         mApplicationVersion = kDefaultApplicationVersion;
+        std::string_view mEngineName         = kDefaultEngineName;
+        uint32_t         mEngineVersion      = kDefaultEngineVersion;
+        uint32_t         mApiVersion         = kDefaultVulkanApiVersion;
+
+        // enable validation layers in debug mode by default
+        #ifndef NDEBUG
+            bool mEnableValidation = true;
+        #else
+            bool mEnableValidation = false;
+        #endif
+
+        // extensions and validation layers
+        std::vector<const char*> mExtensions;
+        std::vector<const char*> mValidationLayers;
+    };
 }  // namespace keplar
