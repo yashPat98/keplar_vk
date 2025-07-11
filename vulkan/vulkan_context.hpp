@@ -60,9 +60,10 @@ namespace keplar
             // core vulkan configuration
             Builder& enableValidation(bool enable);
             Builder& withPlatform(const Platform& platform);
-            Builder& withInstanceExtensions(const std::vector<const char*>& instanceExtensions);
-            Builder& withValidationLayers(const std::vector<const char*>& validationLayers);
-            Builder& withDeviceExtensions(const std::vector<const char*>& deviceExtensions);
+            Builder& withInstanceExtensions(const std::vector<std::string_view>& instanceExtensions);
+            Builder& withInstanceExtensionsIfValidation(const std::vector<std::string_view>& instanceExtensions);
+            Builder& withValidationLayers(const std::vector<std::string_view>& validationLayers);
+            Builder& withDeviceExtensions(const std::vector<std::string_view>& deviceExtensions);
             Builder& withDeviceFeatures(VkPhysicalDeviceFeatures features);
             Builder& preferDedicatedComputeQueue();
             Builder& preferDedicatedTransferQueue();

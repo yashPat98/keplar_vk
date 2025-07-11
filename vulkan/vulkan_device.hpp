@@ -18,6 +18,15 @@ namespace keplar
         VkPhysicalDeviceFeatures mRequestedFeatures;
         bool mPreferDedicatedComputeQueue = false;
         bool mPreferDedicatedTransferQueue = false;
+
+        inline void setDeviceExtensions(const std::vector<std::string_view>& extensions)
+        {
+            mDeviceExtensions.reserve(extensions.size());
+            for (const auto& extension : extensions)
+            {
+                mDeviceExtensions.emplace_back(extension.data());
+            }
+        }
     };
 
     struct QueueFamilyIndices
@@ -27,7 +36,7 @@ namespace keplar
         std::optional<uint32_t> mComputeFamily;
         std::optional<uint32_t> mTransferFamily; 
 
-        bool isComplete() const { return (mGraphicsFamily && mPresentFamily); }
+        inline bool isComplete() const { return (mGraphicsFamily && mPresentFamily); }
     };
 
     class VulkanDevice final
@@ -65,7 +74,6 @@ namespace keplar
             bool selectPhysicalDevice(const VulkanSurface& surface);
             bool createLogicalDevice();
             bool getDeviceQueues();
-            void validateDeviceExtensions();
             void validateRequestedFeatures();
             
             bool checkDeviceExtensionSupport(VkPhysicalDevice device) const;

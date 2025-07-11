@@ -47,9 +47,9 @@ namespace keplar
         #endif
 
         // extensions and validation layers
-        std::vector<const char*> mInstanceExtensions;
-        std::vector<const char*> mValidationLayers;
-        std::vector<const char*> mDeviceExtensions;
+        std::vector<std::string_view> mInstanceExtensions;
+        std::vector<std::string_view> mValidationLayers;
+        std::vector<std::string_view> mDeviceExtensions;
 
         // requested physical device features
         VkPhysicalDeviceFeatures mRequestedFeatures;

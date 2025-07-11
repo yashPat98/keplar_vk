@@ -17,7 +17,6 @@ namespace keplar
 
     VulkanContext::~VulkanContext()
     {
-        // TODO: handle based on m_isDestroyed to avoid redundant checks
         destroy();
     }
 
@@ -107,21 +106,78 @@ namespace keplar
         return *this;
     }
 
-    VulkanContext::Builder& VulkanContext::Builder::withInstanceExtensions(const std::vector<const char*>& instanceExtensions)
+    VulkanContext::Builder& VulkanContext::Builder::withInstanceExtensions(const std::vector<std::string_view>& instanceExtensions)
     {
-        m_vulkanContextConfig.mInstanceExtensions = instanceExtensions;
+        auto& existingExtensions = m_vulkanContextConfig.mInstanceExtensions;
+        existingExtensions.reserve(existingExtensions.size() + instanceExtensions.size());
+
+        std::unordered_set<std::string_view> seen(existingExtensions.begin(), existingExtensions.end());
+        for (const auto& extension : instanceExtensions)
+        {
+            // skip duplicates and empty strings
+            if (extension.empty() || !seen.insert(extension).second) 
+            {
+                continue;
+            }
+            existingExtensions.emplace_back(extension);
+        }
         return *this;
     }
 
-    VulkanContext::Builder& VulkanContext::Builder::withValidationLayers(const std::vector<const char*>& validationLayers)
+    VulkanContext::Builder& VulkanContext::Builder::withInstanceExtensionsIfValidation(const std::vector<std::string_view>& instanceExtensions)
     {
-        m_vulkanContextConfig.mValidationLayers = validationLayers;
+        if (!m_vulkanContextConfig.mEnableValidation)
+        {
+            return *this;
+        }
+        
+        auto& existingExtensions = m_vulkanContextConfig.mInstanceExtensions;
+        existingExtensions.reserve(existingExtensions.size() + instanceExtensions.size());
+
+        std::unordered_set<std::string_view> seen(existingExtensions.begin(), existingExtensions.end());
+        for (const auto& extension : instanceExtensions)
+        {
+            // skip duplicates and empty strings
+            if (extension.empty() || !seen.insert(extension).second) 
+            {
+                continue;
+            }
+            existingExtensions.emplace_back(extension);
+        }
         return *this;
     }
 
-    VulkanContext::Builder& VulkanContext::Builder::withDeviceExtensions(const std::vector<const char*>& deviceExtensions)
+    VulkanContext::Builder& VulkanContext::Builder::withValidationLayers(const std::vector<std::string_view>& validationLayers)
     {
-        m_vulkanContextConfig.mDeviceExtensions = deviceExtensions;
+        auto& existingLayers = m_vulkanContextConfig.mValidationLayers;
+        existingLayers.reserve(existingLayers.size() + validationLayers.size());
+
+        std::unordered_set<std::string_view> seen(existingLayers.begin(), existingLayers.end());
+        for (auto layer : validationLayers)
+        {
+            if (layer.empty() || !seen.insert(layer).second)
+            {
+                continue;
+            }
+            existingLayers.emplace_back(layer);
+        }
+        return *this;
+    }
+
+    VulkanContext::Builder& VulkanContext::Builder::withDeviceExtensions(const std::vector<std::string_view>& deviceExtensions)
+    {
+        auto& existingExtensions = m_vulkanContextConfig.mDeviceExtensions;
+        existingExtensions.reserve(existingExtensions.size() + deviceExtensions.size());
+
+        std::unordered_set<std::string_view> seen(existingExtensions.begin(), existingExtensions.end());
+        for (auto extension : deviceExtensions)
+        {
+            if (extension.empty() || !seen.insert(extension).second)
+            {
+                continue;
+            }
+            existingExtensions.emplace_back(extension);
+        }
         return *this;
     }
 
@@ -153,10 +209,9 @@ namespace keplar
         }
 
         // add platform-specific extensions to config
-        for (const char* extension : m_platform->getSurfaceInstanceExtensions())
-        {
-            m_vulkanContextConfig.mInstanceExtensions.emplace_back(extension);
-        }
+        const auto& platformExtensions = m_platform->getSurfaceInstanceExtensions();
+        auto& instanceExtensions = m_vulkanContextConfig.mInstanceExtensions;
+        instanceExtensions.insert(instanceExtensions.begin(), platformExtensions.begin(), platformExtensions.end());
 
         // add default validation layer if not provided
         if (m_vulkanContextConfig.mEnableValidation && m_vulkanContextConfig.mValidationLayers.empty())

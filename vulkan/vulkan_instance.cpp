@@ -112,7 +112,7 @@ namespace keplar
         return std::find(m_enabledValidationLayers.begin(), m_enabledValidationLayers.end(), layerName) != m_enabledValidationLayers.end();
     }
 
-    bool VulkanInstance::validateAndSetExtensions(const std::vector<const char*>& requestedExtensions)
+    bool VulkanInstance::validateAndSetExtensions(const std::vector<std::string_view>& requestedExtensions)
     {
         // vulkan spec allows instance creation without any extensions
         if (requestedExtensions.empty())
@@ -150,31 +150,23 @@ namespace keplar
 
         // check if the requested extensions are supported 
         m_enabledExtensions.reserve(requestedExtensions.size());
-        std::unordered_set<std::string> seen;
         for (const auto& extension : requestedExtensions)
         {
-            // skip duplicates 
-            if (!extension || *extension == '\0' || !seen.insert(extension).second)
-            {
-                continue;
-            }
-
-            // check if the extension is supported
             if (supportedExtensions.find(extension) == supportedExtensions.end())
             {
-                VK_LOG_FATAL("requested instance extension %s is not supported by vulkan driver", extension);
+                VK_LOG_FATAL("requested instance extension %s is not supported by vulkan driver", extension.data());
                 return false;
             }
             
             // add the extension to the enabled extensions
-            VK_LOG_INFO("enabled instance extension: %s", extension);
-            m_enabledExtensions.emplace_back(extension);
+            VK_LOG_INFO("enabled instance extension: %s", extension.data());
+            m_enabledExtensions.emplace_back(extension.data());
         }
 
         return true;
     }
 
-    bool VulkanInstance::validateAndSetValidationLayers(const std::vector<const char*>& requestedLayers) 
+    bool VulkanInstance::validateAndSetValidationLayers(const std::vector<std::string_view>& requestedLayers) 
     {
         // validation layers are enabled but no layers are requested 
         if (requestedLayers.empty())
@@ -212,25 +204,17 @@ namespace keplar
 
         // check if the requested layers are supported
         m_enabledValidationLayers.reserve(requestedLayers.size());
-        std::unordered_set<std::string> seen;
         for (const auto& layer : requestedLayers)
         {
-            // skip duplicates
-            if (!layer || *layer == '\0' || !seen.insert(layer).second)
-            {
-                continue;
-            }
-
-            // check if the layer is supported
             if (supportedLayers.find(layer) == supportedLayers.end())
             {
-                VK_LOG_FATAL("requested instance validation layer %s is not supported by vulkan driver", layer);
+                VK_LOG_FATAL("requested instance validation layer %s is not supported by vulkan driver", layer.data());
                 return false;
             }
 
             // add the layer to the enabled validation layers
-            m_enabledValidationLayers.emplace_back(layer);
-            VK_LOG_INFO("enabled instance validation layer: %s", layer);
+            m_enabledValidationLayers.emplace_back(layer.data());
+            VK_LOG_INFO("enabled instance validation layer: %s", layer.data());
         }
 
         return true;

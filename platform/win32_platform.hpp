@@ -21,7 +21,7 @@ namespace keplar
             virtual void shutdown() override;
 
             virtual VkSurfaceKHR createVulkanSurface(VkInstance vkInstance) const override;
-            virtual std::vector<const char*> getSurfaceInstanceExtensions() const override;
+            virtual std::vector<std::string_view> getSurfaceInstanceExtensions() const override;
             virtual void* getNativeWindowHandle() const override;
             virtual uint32_t getWindowWidth() const override;
             virtual uint32_t getWindowHeight() const override;

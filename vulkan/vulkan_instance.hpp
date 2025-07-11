@@ -32,8 +32,8 @@ namespace keplar
             bool isValidationLayerEnabled(const char* layerName) const;
 
         private:
-            bool validateAndSetExtensions(const std::vector<const char*>& requestedExtensions);
-            bool validateAndSetValidationLayers(const std::vector<const char*>& requestedLayers);
+            bool validateAndSetExtensions(const std::vector<std::string_view>& requestedExtensions);
+            bool validateAndSetValidationLayers(const std::vector<std::string_view>& requestedLayers);
 
             VkInstance m_vkInstance;
             std::vector<const char*> m_enabledExtensions;

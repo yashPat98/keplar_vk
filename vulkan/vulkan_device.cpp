@@ -43,8 +43,8 @@ namespace keplar
         // store the VkInstance for resource creation and destruction
         m_vkInstance = instance.get();
         
-        // copy device config params from builder config
-        m_deviceConfig.mDeviceExtensions = config.mDeviceExtensions;
+        // copy device config params from builder config        
+        m_deviceConfig.setDeviceExtensions(config.mDeviceExtensions);
         m_deviceConfig.mRequestedFeatures = config.mRequestedFeatures;
         m_deviceConfig.mPreferDedicatedComputeQueue = config.mPreferDedicatedComputeQueue;
         m_deviceConfig.mPreferDedicatedTransferQueue = config.mPreferDedicatedTransferQueue;
@@ -163,9 +163,6 @@ namespace keplar
             VK_LOG_FATAL("failed to query physical devices : %s (code: %d)", string_VkResult(vkResult), vkResult);
             return false;
         }
-
-        // sanitize device extensions
-        validateDeviceExtensions();
 
         // select best vulkan physical device from available devices
         std::optional<PhysicalDeviceInfo> selectedDeviceInfo;
@@ -533,29 +530,12 @@ namespace keplar
         VK_LOG_INFO("Compute Queue Index   : %d", indices.mComputeFamily.value_or(-1));
         VK_LOG_INFO("Transfer Queue Index  : %d", indices.mTransferFamily.value_or(-1));
         VK_LOG_INFO("───────────────────────────────────────────────────────────────");
-    }
 
-    void VulkanDevice::validateDeviceExtensions()
-    {
-        auto& extensions = m_deviceConfig.mDeviceExtensions;
-        if (extensions.empty())
+        // log enabled validation layers
+        for (const auto& extension : m_deviceConfig.mDeviceExtensions)
         {
-            return;
+            VK_LOG_INFO("enabled device extension: %s", extension);
         }
-
-        std::unordered_set<std::string> seen;
-        std::vector<const char*> sanitized;
-        sanitized.reserve(extensions.size());
-        for (const auto& extension : extensions)
-        {
-            // skip empty or null extension and duplicates 
-            if (!extension || *extension == '\0' || !seen.insert(extension).second)
-            {
-                continue;
-            }
-            sanitized.emplace_back(extension);
-        }
-        extensions = std::move(sanitized);
     }
 
     void VulkanDevice::validateRequestedFeatures()

@@ -129,7 +129,7 @@ namespace keplar
         return vkSurfaceKHR;
     }
 
-    std::vector<const char*> Win32Platform::getSurfaceInstanceExtensions() const 
+    std::vector<std::string_view> Win32Platform::getSurfaceInstanceExtensions() const 
     {
         return { VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME };
     }
