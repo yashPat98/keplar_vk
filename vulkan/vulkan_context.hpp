@@ -9,6 +9,7 @@
 #include "platform/platform.hpp"
 #include "vulkan_instance.hpp"
 #include "vulkan_surface.hpp"
+#include "vulkan_device.hpp"
 
 namespace keplar
 {
@@ -35,6 +36,7 @@ namespace keplar
         private:
             std::unique_ptr<VulkanInstance> m_vulkanInstance;
             std::unique_ptr<VulkanSurface> m_vulkanSurface;
+            std::unique_ptr<VulkanDevice> m_vulkanDevice;
     };
 
     class VulkanContext::Builder
@@ -48,18 +50,22 @@ namespace keplar
             Builder(Builder&&) = delete;
             Builder& operator=(Builder&&) = delete;
 
-            // core vulkan configuration
-            Builder& withPlatform(const Platform& platform);
-            Builder& withInstanceExtensions(const std::vector<const char*>& extensions);
-            Builder& withValidationLayers(const std::vector<const char*>& validationLayers);
-            Builder& enableValidation(bool enable);
-
             // application info overrides
             Builder& withApplicationName(std::string_view appName);
             Builder& withApplicationVersion(uint32_t appVersion);
             Builder& withEngineName(std::string_view engineName);
             Builder& withEngineVersion(uint32_t engineVersion);
             Builder& withApiVersion(uint32_t apiVersion);
+
+            // core vulkan configuration
+            Builder& enableValidation(bool enable);
+            Builder& withPlatform(const Platform& platform);
+            Builder& withInstanceExtensions(const std::vector<const char*>& instanceExtensions);
+            Builder& withValidationLayers(const std::vector<const char*>& validationLayers);
+            Builder& withDeviceExtensions(const std::vector<const char*>& deviceExtensions);
+            Builder& withDeviceFeatures(VkPhysicalDeviceFeatures features);
+            Builder& preferDedicatedComputeQueue();
+            Builder& preferDedicatedTransferQueue();
 
             // builds vulkan context based on provided configuration
             std::unique_ptr<VulkanContext> build();

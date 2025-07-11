@@ -18,19 +18,20 @@ namespace keplar
         destroy();
     }
 
-    bool VulkanSurface::initialize(VkInstance vkInstance, const Platform& platform)
+    bool VulkanSurface::initialize(const VulkanInstance& instance, const Platform& platform)
     {
+        // store the VkInstance for resource creation and destruction
+        m_vkInstance = instance.get();
+
         // get presentation surface from platform 
-        m_vkSurfaceKHR = platform.createVulkanSurface(vkInstance);
+        m_vkSurfaceKHR = platform.createVulkanSurface(m_vkInstance);
         if (m_vkSurfaceKHR == VK_NULL_HANDLE)
         {   
             VK_LOG_FATAL("failed to create presentation surface");
             return false;
         }
         
-        // store instance reference for destruction
         VK_LOG_INFO("presentation surface created successfully");
-        m_vkInstance = vkInstance;
         return true;
     }
 
@@ -45,6 +46,25 @@ namespace keplar
 
         // clear instance reference
         m_vkInstance = VK_NULL_HANDLE;
+    }
+
+    bool VulkanSurface::canQueueFamilyPresent(VkPhysicalDevice vkPhysicalDevice, uint32_t queueFamilyIndex) const
+    {
+        if (vkPhysicalDevice == VK_NULL_HANDLE)
+        {
+            VK_LOG_WARN("canQueueFamilyPresent called with VK_NULL_HANDLE (queue family %u)", queueFamilyIndex);
+            return false;
+        }
+
+        VkBool32 presentSupport = VK_FALSE;
+        VkResult vkResult = vkGetPhysicalDeviceSurfaceSupportKHR(vkPhysicalDevice, queueFamilyIndex, m_vkSurfaceKHR, &presentSupport);
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_ERROR("surface support query failed (queue family %u): %s", queueFamilyIndex, string_VkResult(vkResult));
+            return false;
+        }
+
+        return presentSupport == VK_TRUE;
     }
 
     VkSurfaceKHR VulkanSurface::get() const

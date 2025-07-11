@@ -22,7 +22,7 @@ namespace keplar
     bool VulkanInstance::initialize(const VulkanContextConfig& config)
     {
         // set extensions to be enabled
-        if (!validateAndSetExtensions(config.mExtensions))
+        if (!validateAndSetExtensions(config.mInstanceExtensions))
         {
             VK_LOG_ERROR("validateAndSetExtensions failed");
             return false;
@@ -131,8 +131,8 @@ namespace keplar
         }
 
         // get the supported instance extensions
-        std::vector<VkExtensionProperties> vkExtensionProperties(extensionCount);
-        vkResult = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, vkExtensionProperties.data());
+        std::vector<VkExtensionProperties> extensionProperties(extensionCount);
+        vkResult = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensionProperties.data());
         if (vkResult != VK_SUCCESS)
         {
             VK_LOG_FATAL("failed to query instance extension properties : %s (code: %d)", string_VkResult(vkResult), vkResult);
@@ -140,20 +140,12 @@ namespace keplar
         }
 
         // create a set of supported extensions for fast lookup
-        std::unordered_set<std::string> supportedExtensions;
+        std::unordered_set<std::string_view> supportedExtensions;
         supportedExtensions.reserve(extensionCount);
-        for (const auto& elm : vkExtensionProperties)
+        for (const auto& elm : extensionProperties)
         {
             supportedExtensions.insert(elm.extensionName);
-        }
-
-        // log the supported extensions in debug mode
-        if (Logger::getInstance().isEnabled(Logger::Level::Debug))
-        {
-            for (const auto& extension : supportedExtensions)
-            {
-                VK_LOG_DEBUG("supported instance extension: %s", extension.c_str());
-            }
+            VK_LOG_DEBUG("supported instance extension: %s", elm.extensionName);
         }
 
         // check if the requested extensions are supported 
@@ -201,8 +193,8 @@ namespace keplar
         }
  
         // get the supported validation layers
-        std::vector<VkLayerProperties> vkLayerProperties(layerCount);
-        vkResult = vkEnumerateInstanceLayerProperties(&layerCount, vkLayerProperties.data());
+        std::vector<VkLayerProperties> layerProperties(layerCount);
+        vkResult = vkEnumerateInstanceLayerProperties(&layerCount, layerProperties.data());
         if (vkResult != VK_SUCCESS)
         {
             VK_LOG_FATAL("failed to query instance validation layer properties : %s (code: %d)", string_VkResult(vkResult), vkResult);
@@ -210,20 +202,12 @@ namespace keplar
         }
 
         // create a set of supported layers for fast lookup
-        std::unordered_set<std::string> supportedLayers;
+        std::unordered_set<std::string_view> supportedLayers;
         supportedLayers.reserve(layerCount);
-        for (const auto& layer : vkLayerProperties)
+        for (const auto& layer : layerProperties)
         {
             supportedLayers.insert(layer.layerName);
-        }
-
-        // log the supported layers in debug mode
-        if (Logger::getInstance().isEnabled(Logger::Level::Debug))
-        {
-            for (const auto& layer : supportedLayers)
-            {
-                VK_LOG_DEBUG("supported instance validation layer: %s", layer.c_str());
-            }
+            VK_LOG_DEBUG("supported instance validation layer: %s", layer.layerName);
         }
 
         // check if the requested layers are supported

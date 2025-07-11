@@ -4,6 +4,9 @@
 
 #pragma once
 
+// std headers
+#include <vector>
+
 // define platform-specific Vulkan surface extension
 #if defined(_WIN32)
     #define VK_USE_PLATFORM_WIN32_KHR
@@ -44,7 +47,15 @@ namespace keplar
         #endif
 
         // extensions and validation layers
-        std::vector<const char*> mExtensions;
+        std::vector<const char*> mInstanceExtensions;
         std::vector<const char*> mValidationLayers;
+        std::vector<const char*> mDeviceExtensions;
+
+        // requested physical device features
+        VkPhysicalDeviceFeatures mRequestedFeatures;
+
+        // hint to prefer dedicated queue families 
+        bool mPreferDedicatedComputeQueue = false;
+        bool mPreferDedicatedTransferQueue = false;
     };
 }  // namespace keplar

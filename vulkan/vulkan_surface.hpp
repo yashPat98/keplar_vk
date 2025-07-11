@@ -22,9 +22,11 @@ namespace keplar
             VulkanSurface& operator=(VulkanSurface&&) noexcept = delete;
 
             // manage lifetime
-            bool initialize(VkInstance vkInstance, const Platform& platform);
+            bool initialize(const VulkanInstance& instance, const Platform& platform);
             void destroy();
-            
+
+            bool canQueueFamilyPresent(VkPhysicalDevice vkPhysicalDevice, uint32_t queueFamilyIndex) const; 
+
             VkSurfaceKHR get() const;
             bool isValid() const;
 

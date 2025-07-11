@@ -5,6 +5,7 @@
 #include "keplar_app.hpp"
 #include "utils/logger.hpp"
 #include "platform/platform_factory.hpp"
+#include "vulkan/vk_utils.hpp"
 
 namespace keplar
 {
@@ -40,6 +41,9 @@ namespace keplar
         // create vulkan context using the builder pattern 
         m_vulkanContext = VulkanContext::Builder::Builder()
                             .withPlatform(*m_platform)
+                            .withInstanceExtensions({ VK_EXT_DEBUG_UTILS_EXTENSION_NAME })
+                            .withValidationLayers({ VK_LAYER_KHRONOS_VALIDATION_NAME })
+                            .withDeviceExtensions({ VK_KHR_SWAPCHAIN_EXTENSION_NAME })
                             .build();
                             
         if (!m_vulkanContext)
