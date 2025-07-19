@@ -121,7 +121,7 @@ namespace keplar
             return true;
         }
 
-        // get the count of supported instance extensions
+        // query the count of supported instance extensions
         uint32_t extensionCount = 0;
         VkResult vkResult = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
         if (vkResult != VK_SUCCESS)
@@ -130,7 +130,7 @@ namespace keplar
             return false;
         }
 
-        // get the supported instance extensions
+        // retrieve the supported instance extensions
         std::vector<VkExtensionProperties> extensionProperties(extensionCount);
         vkResult = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensionProperties.data());
         if (vkResult != VK_SUCCESS)
@@ -175,7 +175,7 @@ namespace keplar
             return true;
         }
 
-        // get the count of supported validation layers
+        // query the count of supported validation layers
         uint32_t layerCount = 0;
         VkResult vkResult = vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
         if (vkResult != VK_SUCCESS)
@@ -184,7 +184,7 @@ namespace keplar
             return false;
         }
  
-        // get the supported validation layers
+        // retrieve the supported validation layers
         std::vector<VkLayerProperties> layerProperties(layerCount);
         vkResult = vkEnumerateInstanceLayerProperties(&layerCount, layerProperties.data());
         if (vkResult != VK_SUCCESS)

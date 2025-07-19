@@ -67,6 +67,84 @@ namespace keplar
         return presentSupport == VK_TRUE;
     }
 
+    std::vector<VkSurfaceFormatKHR> VulkanSurface::getSupportedFormats(VkPhysicalDevice vkPhysicalDevice) const    
+    {
+        if (vkPhysicalDevice == VK_NULL_HANDLE)
+        {
+            VK_LOG_WARN("getSupportedFormats called with VK_NULL_HANDLE");
+            return {};
+        }
+
+        // query the count of supported surface formats
+        uint32_t formatCount = 0;
+        VkResult vkResult = vkGetPhysicalDeviceSurfaceFormatsKHR(vkPhysicalDevice, m_vkSurfaceKHR, &formatCount, nullptr);
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_ERROR("failed to query surface format count : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            return {};
+        }
+
+        // retrieve the supported surface formats
+        std::vector<VkSurfaceFormatKHR> surfaceFormats(formatCount);
+        vkResult = vkGetPhysicalDeviceSurfaceFormatsKHR(vkPhysicalDevice, m_vkSurfaceKHR, &formatCount, surfaceFormats.data());
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_ERROR("failed to retrieve surface formats : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            return {};
+        }
+
+        return surfaceFormats;
+    }
+
+    std::vector<VkPresentModeKHR> VulkanSurface::getSupportedPresentModes(VkPhysicalDevice vkPhysicalDevice) const
+    {
+        if (vkPhysicalDevice == VK_NULL_HANDLE)
+        {
+            VK_LOG_WARN("getSupportedPresentModes called with VK_NULL_HANDLE");
+            return {};
+        }
+
+        // query the count of supported surface present modes 
+        uint32_t presentModeCount = 0;
+        VkResult vkResult = vkGetPhysicalDeviceSurfacePresentModesKHR(vkPhysicalDevice, m_vkSurfaceKHR, &presentModeCount, nullptr);
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_ERROR("failed to query surface present mode count : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            return {};
+        }
+
+        // retrieve the supported surface present modes 
+        std::vector<VkPresentModeKHR> presentModes(presentModeCount);
+        vkResult = vkGetPhysicalDeviceSurfacePresentModesKHR(vkPhysicalDevice, m_vkSurfaceKHR, &presentModeCount, presentModes.data());
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_ERROR("failed to retrieve surface present modes : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            return {};
+        }
+
+        return presentModes;
+    }
+
+    VkSurfaceCapabilitiesKHR VulkanSurface::getCapabilities(VkPhysicalDevice vkPhysicalDevice) const
+    {
+        VkSurfaceCapabilitiesKHR vkSurfaceCapabilitiesKHR{};
+        if (vkPhysicalDevice == VK_NULL_HANDLE)
+        {
+            VK_LOG_WARN("getCapabilities called with VK_NULL_HANDLE");
+            return vkSurfaceCapabilitiesKHR;
+        }
+
+        // retrieve the surface capabilities
+        VkResult vkResult = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkPhysicalDevice, m_vkSurfaceKHR, &vkSurfaceCapabilitiesKHR);
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_ERROR("failed to retrieve surface capabilities : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            return vkSurfaceCapabilitiesKHR;
+        }
+
+        return vkSurfaceCapabilitiesKHR;
+    }
+
     VkSurfaceKHR VulkanSurface::get() const
     {
         return m_vkSurfaceKHR;

@@ -25,12 +25,18 @@ namespace keplar
             bool initialize(const VulkanInstance& instance, const Platform& platform);
             void destroy();
 
+            // query surface support details 
             bool canQueueFamilyPresent(VkPhysicalDevice vkPhysicalDevice, uint32_t queueFamilyIndex) const; 
+            std::vector<VkSurfaceFormatKHR> getSupportedFormats(VkPhysicalDevice vkPhysicalDevice) const;
+            std::vector<VkPresentModeKHR> getSupportedPresentModes(VkPhysicalDevice vkPhysicalDevice) const; 
+            VkSurfaceCapabilitiesKHR getCapabilities(VkPhysicalDevice vkPhysicalDevice) const;
 
+            // accessors
             VkSurfaceKHR get() const;
             bool isValid() const;
 
         private:
+            // vulkan handles
             VkSurfaceKHR m_vkSurfaceKHR;
             VkInstance m_vkInstance;
     };

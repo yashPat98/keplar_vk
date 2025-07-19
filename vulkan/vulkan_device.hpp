@@ -57,6 +57,7 @@ namespace keplar
             // accessors
             VkDevice getDevice() const;
             VkPhysicalDevice getPhysicalDevice() const;
+            QueueFamilyIndices getQueueFamilyIndices() const;
             VkQueue getGraphicsQueue() const;
             VkQueue getPresentQueue() const;
             VkQueue getComputeQueue() const;

@@ -97,6 +97,11 @@ namespace keplar
         return m_vkPhysicalDevice;
     }
 
+    QueueFamilyIndices VulkanDevice::getQueueFamilyIndices() const
+    {
+        return m_queueFamilyIndices;
+    }
+
     VkQueue VulkanDevice::getGraphicsQueue() const
     {
         return m_graphicsQueue;
@@ -269,6 +274,7 @@ namespace keplar
             return false;
         }
 
+        VK_LOG_INFO("logical device created successfully.");
         return true;
     }
 

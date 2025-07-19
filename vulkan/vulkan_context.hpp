@@ -10,6 +10,7 @@
 #include "vulkan_instance.hpp"
 #include "vulkan_surface.hpp"
 #include "vulkan_device.hpp"
+#include "vulkan_swapchain.hpp"
 
 namespace keplar
 {
@@ -37,6 +38,7 @@ namespace keplar
             std::unique_ptr<VulkanInstance> m_vulkanInstance;
             std::unique_ptr<VulkanSurface> m_vulkanSurface;
             std::unique_ptr<VulkanDevice> m_vulkanDevice;
+            std::unique_ptr<VulkanSwapchain> m_vulkanSwapchain;
     };
 
     class VulkanContext::Builder

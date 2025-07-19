@@ -12,6 +12,7 @@ namespace keplar
         : m_vulkanInstance(std::make_unique<VulkanInstance>())
         , m_vulkanSurface(std::make_unique<VulkanSurface>())
         , m_vulkanDevice(std::make_unique<VulkanDevice>())
+        , m_vulkanSwapchain(std::make_unique<VulkanSwapchain>())
     {
     }
 
@@ -34,8 +35,15 @@ namespace keplar
             return false;
         }
 
-        // choose appropriate physical device and create logical device with requested queues, features and extensions
+        // choose appropriate physical device and create logical device 
         if (!m_vulkanDevice->initialize(*m_vulkanInstance, *m_vulkanSurface, config))
+        {
+            return false;
+        }
+
+        // create swapchain and image views
+        VkExtent2D windowExtent{ platform.getWindowWidth(), platform.getWindowHeight() };
+        if (!m_vulkanSwapchain->initialize(*m_vulkanSurface, *m_vulkanDevice, windowExtent))
         {
             return false;
         }
@@ -46,6 +54,11 @@ namespace keplar
     void VulkanContext::destroy()
     {
         // destroy in reverse order of creation for safe cleanup
+        if (m_vulkanSwapchain)
+        {
+            m_vulkanSwapchain->destroy();
+        }
+
         if (m_vulkanDevice)
         {
             m_vulkanDevice->destroy();
