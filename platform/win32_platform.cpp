@@ -159,6 +159,14 @@ namespace keplar
 
         switch (iMsg)
         {
+            case WM_SIZE:
+                if (wParam != SIZE_MINIMIZED)
+                {
+                    platform->m_width = LOWORD(lParam);
+                    platform->m_height = HIWORD(lParam);
+                }
+                break;
+
             case WM_KEYDOWN:
                 switch (wParam)
                 {
