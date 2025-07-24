@@ -9,17 +9,33 @@
 
 namespace keplar
 {
-    VulkanInstance::VulkanInstance()
+    std::unique_ptr<VulkanInstance> VulkanInstance::create(const VulkanContextConfig& config) noexcept
+    {
+        std::unique_ptr<VulkanInstance> instance(new VulkanInstance);
+        if (!instance->initialize(config))
+        {
+            return nullptr;
+        }
+        return instance;
+    }
+
+    VulkanInstance::VulkanInstance() noexcept
         : m_vkInstance(VK_NULL_HANDLE)
     {
     }
 
     VulkanInstance::~VulkanInstance()
     {
-        destroy();
+        // destroy vulkan instance after all vulkan resources have been released
+        if (m_vkInstance != VK_NULL_HANDLE)
+        {
+            vkDestroyInstance(m_vkInstance, nullptr);
+            m_vkInstance = VK_NULL_HANDLE;
+            VK_LOG_INFO("vulkan instance destroyed successfully");
+        }
     }
 
-    bool VulkanInstance::initialize(const VulkanContextConfig& config)
+    bool VulkanInstance::initialize(const VulkanContextConfig& config) noexcept
     {
         // set extensions to be enabled
         if (!validateAndSetExtensions(config.mInstanceExtensions))
@@ -75,44 +91,29 @@ namespace keplar
         return true;
     }
 
-    void VulkanInstance::destroy()
-    {
-        // destroy vulkan instance after all vulkan resources have been released
-        if (m_vkInstance != VK_NULL_HANDLE)
-        {
-            vkDestroyInstance(m_vkInstance, nullptr);
-            m_vkInstance = VK_NULL_HANDLE;
-            VK_LOG_INFO("vulkan instance destroyed successfully");
-        }
-
-        // clear the enabled extensions and validation layers
-        m_enabledExtensions.clear();
-        m_enabledValidationLayers.clear();
-    }
-
-    VkInstance VulkanInstance::get() const
+    VkInstance VulkanInstance::get() const noexcept
     {
         return m_vkInstance;
     }
 
-    bool VulkanInstance::isValid() const
+    bool VulkanInstance::isValid() const noexcept
     {
         return (m_vkInstance != VK_NULL_HANDLE);
     }
 
-    bool VulkanInstance::isExtensionEnabled(const char* extensionName) const
+    bool VulkanInstance::isExtensionEnabled(const char* extensionName) const noexcept
     {
         // check if the extension is enabled
         return std::find(m_enabledExtensions.begin(), m_enabledExtensions.end(), extensionName) != m_enabledExtensions.end();
     }
 
-    bool VulkanInstance::isValidationLayerEnabled(const char* layerName) const
+    bool VulkanInstance::isValidationLayerEnabled(const char* layerName) const noexcept
     {
         // check if the validation layer is enabled
         return std::find(m_enabledValidationLayers.begin(), m_enabledValidationLayers.end(), layerName) != m_enabledValidationLayers.end();
     }
 
-    bool VulkanInstance::validateAndSetExtensions(const std::vector<std::string_view>& requestedExtensions)
+    bool VulkanInstance::validateAndSetExtensions(const std::vector<std::string_view>& requestedExtensions) noexcept
     {
         // vulkan spec allows instance creation without any extensions
         if (requestedExtensions.empty())
@@ -166,7 +167,7 @@ namespace keplar
         return true;
     }
 
-    bool VulkanInstance::validateAndSetValidationLayers(const std::vector<std::string_view>& requestedLayers) 
+    bool VulkanInstance::validateAndSetValidationLayers(const std::vector<std::string_view>& requestedLayers) noexcept
     {
         // validation layers are enabled but no layers are requested 
         if (requestedLayers.empty())

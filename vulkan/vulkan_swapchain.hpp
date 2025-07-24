@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <memory>
+
 #include "vk_config.hpp"
 #include "vulkan_surface.hpp"
 #include "vulkan_device.hpp"
@@ -13,7 +15,10 @@ namespace keplar
     class VulkanSwapchain final 
     {
         public:
-            VulkanSwapchain();
+            // creation and destruction
+            static std::unique_ptr<VulkanSwapchain> create(const VulkanSurface& surface, 
+                                                           const VulkanDevice& device, 
+                                                           VkExtent2D windowExtent) noexcept;
             ~VulkanSwapchain();
 
             // disable copy and move semantics to enforce unique ownership
@@ -22,29 +27,29 @@ namespace keplar
             VulkanSwapchain(VulkanSwapchain&&) = delete;
             VulkanSwapchain& operator=(VulkanSwapchain&&) = delete;
 
-            bool initialize(const VulkanSurface& surface, const VulkanDevice& device, VkExtent2D windowExtent);
-            void destroy();
-
             // accessors
-            VkSwapchainKHR get() const;
-            VkFormat getFormat() const;
-            VkColorSpaceKHR getColorSpace() const;
-            VkPresentModeKHR getPresentMode() const;
-            VkExtent2D getExtent() const;
-            uint32_t getImageCount() const;
+            VkSwapchainKHR get() const noexcept;
+            VkFormat getFormat() const noexcept;
+            VkColorSpaceKHR getColorSpace() const noexcept;
+            VkPresentModeKHR getPresentMode() const noexcept;
+            VkExtent2D getExtent() const noexcept;
+            uint32_t getImageCount() const noexcept;
 
-            const std::vector<VkImage>& getImages() const;
-            const std::vector<VkImageView>& getImageViews() const;
+            const std::vector<VkImage>& getImages() const noexcept; 
+            const std::vector<VkImageView>& getImageViews() const noexcept;
  
         private:
-            void chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& surfaceFormats);
-            void choosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
-            void chooseImageCount(const VkSurfaceCapabilitiesKHR& surfaceCapabilities);
-            void chooseSwapExtent(const VkSurfaceCapabilitiesKHR& surfaceCapabilities, VkExtent2D windowExtent);
-            void choosePreTransform(const VkSurfaceCapabilitiesKHR& surfaceCapabilities);
-            bool createSwapchain(VkSurfaceKHR surface, QueueFamilyIndices indices);
-            bool recreateSwapchain(const VulkanSurface& surface, const VulkanDevice& device, VkExtent2D windowExtent);
-            bool createImageViews();
+            // construction helpers
+            VulkanSwapchain() noexcept;
+            bool initialize(const VulkanSurface& surface, const VulkanDevice& device, VkExtent2D windowExtent) noexcept;
+            void chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& surfaceFormats) noexcept;
+            void choosePresentMode(const std::vector<VkPresentModeKHR>& presentModes) noexcept;
+            void chooseImageCount(const VkSurfaceCapabilitiesKHR& surfaceCapabilities) noexcept;
+            void chooseSwapExtent(const VkSurfaceCapabilitiesKHR& surfaceCapabilities, VkExtent2D windowExtent) noexcept;
+            void choosePreTransform(const VkSurfaceCapabilitiesKHR& surfaceCapabilities) noexcept;
+            bool createSwapchain(VkSurfaceKHR surface, QueueFamilyIndices indices) noexcept;
+            bool recreateSwapchain(const VulkanSurface& surface, const VulkanDevice& device, VkExtent2D windowExtent) noexcept;
+            bool createImageViews() noexcept;
 
         private:
             // vulkan handles

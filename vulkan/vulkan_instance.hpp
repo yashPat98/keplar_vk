@@ -4,7 +4,9 @@
 
 #pragma once 
 
+#include <memory>
 #include <vector>
+
 #include "vulkan/vk_config.hpp"
 
 namespace keplar
@@ -12,32 +14,32 @@ namespace keplar
     class VulkanInstance final
     {
         public:
-            VulkanInstance();
+            // creation and destruction
+            static std::unique_ptr<VulkanInstance> create(const VulkanContextConfig& config) noexcept;
             ~VulkanInstance();
 
-            // disable copy and move semantics
+            // disable copy and move semantics to enforce unique ownership
             VulkanInstance(const VulkanInstance&) = delete;
             VulkanInstance& operator=(const VulkanInstance&) = delete;
             VulkanInstance(VulkanInstance&&) = delete;
             VulkanInstance& operator=(VulkanInstance&&) = delete;
 
-            // not thread-safe
-            bool initialize(const VulkanContextConfig& config);
-            void destroy();
-
-            // thread-safe
-            VkInstance get() const;
-            bool isValid() const;
-            bool isExtensionEnabled(const char* extensionName) const;
-            bool isValidationLayerEnabled(const char* layerName) const;
+            // accessors
+            VkInstance get() const noexcept;
+            bool isValid() const noexcept;
+            bool isExtensionEnabled(const char* extensionName) const noexcept;
+            bool isValidationLayerEnabled(const char* layerName) const noexcept;
 
         private:
-            bool validateAndSetExtensions(const std::vector<std::string_view>& requestedExtensions);
-            bool validateAndSetValidationLayers(const std::vector<std::string_view>& requestedLayers);
+            // construction helpers
+            VulkanInstance() noexcept;
+            bool initialize(const VulkanContextConfig& config) noexcept;
+            bool validateAndSetExtensions(const std::vector<std::string_view>& requestedExtensions) noexcept;
+            bool validateAndSetValidationLayers(const std::vector<std::string_view>& requestedLayers) noexcept;
 
+        private:
             VkInstance m_vkInstance;
             std::vector<const char*> m_enabledExtensions;
             std::vector<const char*> m_enabledValidationLayers;
     };
 }   // namespace keplar
-

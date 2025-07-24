@@ -13,19 +13,20 @@ namespace keplar
     class KeplarApp final
     {
         public:
-            KeplarApp();
+            // creation and destruction
+            KeplarApp() noexcept;
             ~KeplarApp() = default;
 
-            // disable copy and move
+            // disable copy and move semantics to enforce unique ownership
             KeplarApp(const KeplarApp&) = delete;
             KeplarApp& operator=(const KeplarApp&) = delete;
             KeplarApp(KeplarApp&&) = delete;
             KeplarApp& operator=(KeplarApp&&) = delete;
 
             // app lifecycle functions
-            bool initialize();
-            bool run();
-            void shutdown();
+            bool initialize() noexcept;
+            bool run() noexcept;
+            void shutdown() noexcept;
 
         private:
             std::unique_ptr<Platform> m_platform;

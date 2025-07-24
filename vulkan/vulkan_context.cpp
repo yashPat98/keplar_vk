@@ -8,71 +8,51 @@
 
 namespace keplar
 {
-    VulkanContext::VulkanContext()
-        : m_vulkanInstance(std::make_unique<VulkanInstance>())
-        , m_vulkanSurface(std::make_unique<VulkanSurface>())
-        , m_vulkanDevice(std::make_unique<VulkanDevice>())
-        , m_vulkanSwapchain(std::make_unique<VulkanSwapchain>())
+    VulkanContext::VulkanContext() noexcept
     {
     }
 
     VulkanContext::~VulkanContext()
     {
-        destroy();
+        // destroy resources in a reverse order
+        m_vulkanSwapchain.reset();
+        m_vulkanDevice.reset();
+        m_vulkanSurface.reset();
+        m_vulkanInstance.reset();
     }
 
-    bool VulkanContext::initialize(const Platform& platform, const VulkanContextConfig& config)
+    bool VulkanContext::initialize(const Platform& platform, const VulkanContextConfig& config) noexcept
     {
         // create vulkan instance 
-        if (!m_vulkanInstance->initialize(config))
+        m_vulkanInstance = VulkanInstance::create(config);
+        if (!m_vulkanInstance)
         {
             return false;
         }
 
         // create presentation surface 
-        if (!m_vulkanSurface->initialize(*m_vulkanInstance, platform))
+        m_vulkanSurface = VulkanSurface::create(*m_vulkanInstance, platform);
+        if (!m_vulkanSurface)
         {
             return false;
         }
 
         // choose appropriate physical device and create logical device 
-        if (!m_vulkanDevice->initialize(*m_vulkanInstance, *m_vulkanSurface, config))
+        m_vulkanDevice = VulkanDevice::create(*m_vulkanInstance, *m_vulkanSurface, config);
+        if (!m_vulkanDevice)
         {
             return false;
         }
 
         // create swapchain and image views
         VkExtent2D windowExtent{ platform.getWindowWidth(), platform.getWindowHeight() };
-        if (!m_vulkanSwapchain->initialize(*m_vulkanSurface, *m_vulkanDevice, windowExtent))
+        m_vulkanSwapchain = VulkanSwapchain::create(*m_vulkanSurface, *m_vulkanDevice, windowExtent);
+        if (!m_vulkanSwapchain)
         {
             return false;
         }
 
         return true;
-    }
-
-    void VulkanContext::destroy()
-    {
-        // destroy in reverse order of creation for safe cleanup
-        if (m_vulkanSwapchain)
-        {
-            m_vulkanSwapchain->destroy();
-        }
-
-        if (m_vulkanDevice)
-        {
-            m_vulkanDevice->destroy();
-        }
-
-        if (m_vulkanSurface)
-        {
-            m_vulkanSurface->destroy();
-        }
-
-        if (m_vulkanInstance)
-        {
-            m_vulkanInstance->destroy();
-        }
     }
 
     // ─────────────── VulkanContext::Builder ───────────────

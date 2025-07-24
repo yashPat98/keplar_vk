@@ -16,13 +16,13 @@ namespace keplar
 
 namespace keplar
 {
-    KeplarApp::KeplarApp()
+    KeplarApp::KeplarApp() noexcept
         : m_platform(nullptr)
         , m_vulkanContext(nullptr)
     {
     }
 
-    bool KeplarApp::initialize()
+    bool KeplarApp::initialize() noexcept
     {
         // create a platform-specific implementation using a factory function.
         m_platform = platform::createPlatform();
@@ -44,8 +44,7 @@ namespace keplar
                             .withInstanceExtensionsIfValidation({ VK_EXT_DEBUG_UTILS_EXTENSION_NAME })
                             .withValidationLayers({ VK_LAYER_KHRONOS_VALIDATION_NAME })
                             .withDeviceExtensions({ VK_KHR_SWAPCHAIN_EXTENSION_NAME })
-                            .build();
-                            
+                            .build();                           
         if (!m_vulkanContext)
         {
             return false;
@@ -54,7 +53,7 @@ namespace keplar
         return true;
     }
 
-    bool KeplarApp::run()
+    bool KeplarApp::run() noexcept
     {
         while (!m_platform->shouldClose())
         {
@@ -63,18 +62,11 @@ namespace keplar
         return true;
     }
 
-    void KeplarApp::shutdown()
+    void KeplarApp::shutdown() noexcept
     {
-        // destroy in reverse order for safe cleanup
-        if (m_vulkanContext)
-        {
-            m_vulkanContext->destroy();
-        }
-
-        if (m_platform)
-        {
-            m_platform->shutdown();
-        }
+        // explicitly destroy resources in a reverse order:
+        m_vulkanContext.reset();
+        m_platform.reset();
     }
 
 }   // namespace keplar

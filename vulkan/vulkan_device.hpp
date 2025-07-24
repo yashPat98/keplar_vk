@@ -4,6 +4,7 @@
 
 #pragma once 
 
+#include <memory>
 #include <vector>
 #include <optional>
 
@@ -12,6 +13,7 @@
 
 namespace keplar
 {
+    // device creation config
     struct VulkanDeviceConfig
     {
         std::vector<const char*> mDeviceExtensions;
@@ -29,6 +31,7 @@ namespace keplar
         }
     };
 
+    // selected queue family indices
     struct QueueFamilyIndices
     {
         std::optional<uint32_t> mGraphicsFamily;
@@ -42,7 +45,10 @@ namespace keplar
     class VulkanDevice final
     {
         public:
-            VulkanDevice();
+            // creation and destruction
+            static std::unique_ptr<VulkanDevice> create(const VulkanInstance& instance, 
+                                                        const VulkanSurface& surface, 
+                                                        const VulkanContextConfig& config) noexcept;
             ~VulkanDevice();
 
             // disable copy and move semantics to enforce unique ownership
@@ -51,36 +57,36 @@ namespace keplar
             VulkanDevice(VulkanDevice&&) = delete;
             VulkanDevice& operator=(VulkanDevice&&) = delete;
 
-            bool initialize(const VulkanInstance& instance, const VulkanSurface& surface, const VulkanContextConfig& config);
-            void destroy();
-
             // accessors
-            VkDevice getDevice() const;
-            VkPhysicalDevice getPhysicalDevice() const;
-            QueueFamilyIndices getQueueFamilyIndices() const;
-            VkQueue getGraphicsQueue() const;
-            VkQueue getPresentQueue() const;
-            VkQueue getComputeQueue() const;
-            VkQueue getTransferQueue() const;
+            VkDevice getDevice() const noexcept;
+            VkPhysicalDevice getPhysicalDevice() const noexcept;
+            QueueFamilyIndices getQueueFamilyIndices() const noexcept;
+            VkQueue getGraphicsQueue() const noexcept;
+            VkQueue getPresentQueue() const noexcept;
+            VkQueue getComputeQueue() const noexcept;
+            VkQueue getTransferQueue() const noexcept;
 
             // physical device information
-            const VkPhysicalDeviceProperties& getPhysicalDeviceProperties() const;
-            const VkPhysicalDeviceFeatures& getPhysicalDeviceFeatures() const;
-            const VkPhysicalDeviceMemoryProperties& getPhysicalDeviceMemoryProperties() const;
-            bool isExtensionEnabled(const char* extensionName) const;
+            const VkPhysicalDeviceProperties& getPhysicalDeviceProperties() const noexcept;
+            const VkPhysicalDeviceFeatures& getPhysicalDeviceFeatures() const noexcept;
+            const VkPhysicalDeviceMemoryProperties& getPhysicalDeviceMemoryProperties() const noexcept;
+            bool isExtensionEnabled(const char* extensionName) const noexcept;
 
         private:
             struct PhysicalDeviceInfo;
 
-            bool selectPhysicalDevice(const VulkanSurface& surface);
-            bool createLogicalDevice();
-            bool getDeviceQueues();
-            void validateRequestedFeatures();
-            
-            bool checkDeviceExtensionSupport(VkPhysicalDevice device) const;
-            QueueFamilyIndices findRequiredQueueFamilies(VkPhysicalDevice device, const VulkanSurface& surface) const;
-            uint64_t scoreDevice(const PhysicalDeviceInfo& physicalDeviceInfo) const;
-            void logPhysicalDeviceInfo(const PhysicalDeviceInfo& physicalDeviceInfo) const;
+            // construction helpers
+            VulkanDevice() noexcept;
+            bool initialize(const VulkanInstance& instance, const VulkanSurface& surface, const VulkanContextConfig& config) noexcept;
+            bool selectPhysicalDevice(const VulkanSurface& surface) noexcept;
+            bool createLogicalDevice() noexcept;
+            bool getDeviceQueues() noexcept;
+            void validateRequestedFeatures() noexcept;
+         
+            bool checkDeviceExtensionSupport(VkPhysicalDevice device) const noexcept;
+            QueueFamilyIndices findRequiredQueueFamilies(VkPhysicalDevice device, const VulkanSurface& surface) const noexcept;
+            uint64_t scoreDevice(const PhysicalDeviceInfo& physicalDeviceInfo) const noexcept;
+            void logPhysicalDeviceInfo(const PhysicalDeviceInfo& physicalDeviceInfo) const noexcept;
 
         private:
             // vulkan handles

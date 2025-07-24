@@ -41,6 +41,7 @@ namespace keplar
     class Logger
     {
         public:
+            // severity levels
             enum class Level
             {
                 Trace = 0,
@@ -51,35 +52,40 @@ namespace keplar
                 Fatal
             };
 
+            // singleton creation
+            static Logger& getInstance() noexcept;
+
+            // disable copy and move semantics
             Logger(const Logger&) = delete;
             Logger(const Logger&&) = delete;
             Logger& operator=(const Logger&) = delete;
             Logger& operator=(const Logger&&) = delete;
 
-            static Logger& getInstance();
-
-            void enqueueLog(Level level, const char* file, int line, const char* fmt, ...);
-            void flush();
-            void terminate();
-            void restart(const std::string& filename = {});
+            // logging operations
+            void enqueueLog(Level level, const char* file, int line, const char* fmt, ...) noexcept;
+            void flush() noexcept;
+            void terminate() noexcept;
+            void restart(const std::string& filename = {}) noexcept;
             
-            void resetLogFile(const std::string& filename);
-            bool isActive() const;
-            void setMinLevel(Level level);
-            void enableLevel(Level level);
-            void disableLevel(Level level);
-            bool isEnabled(Level level) const;
+            // log level control
+            void resetLogFile(const std::string& filename) noexcept;
+            bool isActive() const noexcept;
+            void setMinLevel(Level level) noexcept;
+            void enableLevel(Level level) noexcept;
+            void disableLevel(Level level) noexcept;
+            bool isEnabled(Level level) const noexcept;
             
         private:
-            Logger(const std::string& filename);
+            Logger(const std::string& filename) noexcept;
             ~Logger();
 
-            void processQueue();
-            void formatLogMessage(std::string& out, Level level, const char* timestamp, const char* fileLine, const char* message);
+            // internal helpers
+            void processQueue() noexcept;
+            void formatLogMessage(std::string& out, Level level, const char* timestamp, const char* fileLine, const char* message) noexcept;
             
-            const char* levelToString(Level level) const;
-            std::string getCurrentTimestamp() const;
-            std::string getFileLine(const char* fullPath, int line) const;
+            const char* levelToString(Level level) const noexcept;
+            std::string getCurrentTimestamp() const noexcept;
+            std::string getFileLine(const char* fullPath, int line) const noexcept;
             
         private:
             struct LogEntry

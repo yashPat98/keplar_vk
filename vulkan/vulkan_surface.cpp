@@ -7,7 +7,17 @@
 
 namespace keplar
 {
-    VulkanSurface::VulkanSurface()
+    std::unique_ptr<VulkanSurface> VulkanSurface::create(const VulkanInstance& instance, const Platform& platform) noexcept
+    {
+        std::unique_ptr<VulkanSurface> surface(new VulkanSurface);
+        if (!surface->initialize(instance, platform))
+        {
+            return nullptr;
+        }
+        return surface;
+    }
+
+    VulkanSurface::VulkanSurface() noexcept
         : m_vkSurfaceKHR(VK_NULL_HANDLE)
         , m_vkInstance(VK_NULL_HANDLE)
     {
@@ -15,10 +25,16 @@ namespace keplar
 
     VulkanSurface::~VulkanSurface()
     {
-        destroy();
+        if (m_vkSurfaceKHR != VK_NULL_HANDLE)
+        {
+            vkDestroySurfaceKHR(m_vkInstance, m_vkSurfaceKHR, nullptr);
+            m_vkSurfaceKHR = VK_NULL_HANDLE;
+            m_vkInstance = VK_NULL_HANDLE;
+            VK_LOG_INFO("presentation surface destroyed successfully");
+        }
     }
 
-    bool VulkanSurface::initialize(const VulkanInstance& instance, const Platform& platform)
+    bool VulkanSurface::initialize(const VulkanInstance& instance, const Platform& platform) noexcept
     {
         // store the VkInstance for resource creation and destruction
         m_vkInstance = instance.get();
@@ -35,20 +51,7 @@ namespace keplar
         return true;
     }
 
-    void VulkanSurface::destroy()
-    {
-        if (m_vkSurfaceKHR != VK_NULL_HANDLE)
-        {
-            vkDestroySurfaceKHR(m_vkInstance, m_vkSurfaceKHR, nullptr);
-            m_vkSurfaceKHR = VK_NULL_HANDLE;
-            VK_LOG_INFO("presentation surface destroyed successfully");
-        }
-
-        // clear instance reference
-        m_vkInstance = VK_NULL_HANDLE;
-    }
-
-    bool VulkanSurface::canQueueFamilyPresent(VkPhysicalDevice vkPhysicalDevice, uint32_t queueFamilyIndex) const
+    bool VulkanSurface::canQueueFamilyPresent(VkPhysicalDevice vkPhysicalDevice, uint32_t queueFamilyIndex) const noexcept
     {
         if (vkPhysicalDevice == VK_NULL_HANDLE)
         {
@@ -67,7 +70,7 @@ namespace keplar
         return presentSupport == VK_TRUE;
     }
 
-    std::vector<VkSurfaceFormatKHR> VulkanSurface::getSupportedFormats(VkPhysicalDevice vkPhysicalDevice) const    
+    std::vector<VkSurfaceFormatKHR> VulkanSurface::getSupportedFormats(VkPhysicalDevice vkPhysicalDevice) const noexcept    
     {
         if (vkPhysicalDevice == VK_NULL_HANDLE)
         {
@@ -96,7 +99,7 @@ namespace keplar
         return surfaceFormats;
     }
 
-    std::vector<VkPresentModeKHR> VulkanSurface::getSupportedPresentModes(VkPhysicalDevice vkPhysicalDevice) const
+    std::vector<VkPresentModeKHR> VulkanSurface::getSupportedPresentModes(VkPhysicalDevice vkPhysicalDevice) const noexcept
     {
         if (vkPhysicalDevice == VK_NULL_HANDLE)
         {
@@ -125,7 +128,7 @@ namespace keplar
         return presentModes;
     }
 
-    VkSurfaceCapabilitiesKHR VulkanSurface::getCapabilities(VkPhysicalDevice vkPhysicalDevice) const
+    VkSurfaceCapabilitiesKHR VulkanSurface::getCapabilities(VkPhysicalDevice vkPhysicalDevice) const noexcept
     {
         VkSurfaceCapabilitiesKHR vkSurfaceCapabilitiesKHR{};
         if (vkPhysicalDevice == VK_NULL_HANDLE)
@@ -145,12 +148,12 @@ namespace keplar
         return vkSurfaceCapabilitiesKHR;
     }
 
-    VkSurfaceKHR VulkanSurface::get() const
+    VkSurfaceKHR VulkanSurface::get() const noexcept
     {
         return m_vkSurfaceKHR;
     }
 
-    bool VulkanSurface::isValid() const
+    bool VulkanSurface::isValid() const noexcept
     {
         return (m_vkSurfaceKHR != VK_NULL_HANDLE);
     }

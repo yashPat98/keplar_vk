@@ -13,13 +13,13 @@ namespace keplar
 {
     const std::string kDefaultLogFile = "vklog.txt";
 
-    Logger& Logger::getInstance() 
+    Logger& Logger::getInstance() noexcept 
     {
         static Logger instance(kDefaultLogFile);
         return instance;
     }
 
-    Logger::Logger(const std::string& filename)
+    Logger::Logger(const std::string& filename) noexcept
         : m_filename(filename)
         , m_logStream(m_filename, std::ios::out | std::ios::trunc)
         , m_enabledLevels{ Level::Trace, Level::Debug, Level::Info, Level::Warn, Level::Error, Level::Fatal }
@@ -44,7 +44,7 @@ namespace keplar
         terminate();
     }
 
-    void Logger::enqueueLog(Level level, const char* file, int line, const char* fmt, ...)
+    void Logger::enqueueLog(Level level, const char* file, int line, const char* fmt, ...) noexcept
     {
         if (!isEnabled(level)) 
         {
@@ -93,7 +93,7 @@ namespace keplar
         m_cv.notify_one();
     }
 
-    void Logger::flush()
+    void Logger::flush() noexcept
     {
         std::scoped_lock lock(m_stateMutex, m_queueMutex);
     
@@ -115,7 +115,7 @@ namespace keplar
         }
     }
 
-    void Logger::terminate()
+    void Logger::terminate() noexcept
     {
         // acquire both state and queue mutexes to safely update shutdown state
         {
@@ -141,7 +141,7 @@ namespace keplar
         }
     }
 
-    void Logger::restart(const std::string& filename)
+    void Logger::restart(const std::string& filename) noexcept
     {
         terminate();
         
@@ -168,7 +168,7 @@ namespace keplar
         m_worker = std::thread(&Logger::processQueue, this);
     }
 
-    void Logger::resetLogFile(const std::string& filename)
+    void Logger::resetLogFile(const std::string& filename) noexcept
     {
         if (filename.empty())
         {
@@ -189,13 +189,13 @@ namespace keplar
         }
     }
 
-    bool Logger::isActive() const
+    bool Logger::isActive() const noexcept
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
         return (!m_shutdown.load() && m_logStream.is_open());
     }
 
-    void Logger::setMinLevel(Level level)
+    void Logger::setMinLevel(Level level) noexcept
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
         m_enabledLevels.clear();
@@ -205,25 +205,25 @@ namespace keplar
         }
     }
 
-    void Logger::enableLevel(Level level)
+    void Logger::enableLevel(Level level) noexcept
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
         m_enabledLevels.insert(level);
     }
 
-    void Logger::disableLevel(Level level)
+    void Logger::disableLevel(Level level) noexcept
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
         m_enabledLevels.erase(level);
     }
 
-    bool Logger::isEnabled(Level level) const
+    bool Logger::isEnabled(Level level) const noexcept
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
         return (m_enabledLevels.find(level) != m_enabledLevels.end());
     }
 
-    void Logger::processQueue()
+    void Logger::processQueue() noexcept
     {
         std::unique_lock<std::mutex> queueLock(m_queueMutex);
         while (true)
@@ -263,7 +263,7 @@ namespace keplar
         }
     }
 
-    void Logger::formatLogMessage(std::string& out, Level level, const char* timestamp, const char* fileLine, const char* message)
+    void Logger::formatLogMessage(std::string& out, Level level, const char* timestamp, const char* fileLine, const char* message) noexcept
     {
         // reserve approximate size upfront to reduce reallocations
         out.clear();
@@ -300,7 +300,7 @@ namespace keplar
         out += message;
     }
 
-    const char* Logger::levelToString(Level level) const
+    const char* Logger::levelToString(Level level) const noexcept
     {
         switch (level) 
         {
@@ -321,7 +321,7 @@ namespace keplar
         }
     }
 
-    std::string Logger::getCurrentTimestamp() const
+    std::string Logger::getCurrentTimestamp() const noexcept
     {
         using namespace std::chrono;
         static std::string lastTimestamp;
@@ -351,7 +351,7 @@ namespace keplar
         return finalStream.str();
     }
 
-    std::string Logger::getFileLine(const char* fullPath, int line) const
+    std::string Logger::getFileLine(const char* fullPath, int line) const noexcept
     {
         std::string_view path(fullPath);
         size_t lastSlash = path.find_last_of("/\\");

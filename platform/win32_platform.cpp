@@ -8,7 +8,7 @@
 
 namespace keplar
 {
-    Win32Platform::Win32Platform()
+    Win32Platform::Win32Platform() noexcept
         : m_hInstance(GetModuleHandle(nullptr))
         , m_hwnd(NULL)
         , m_windowPlacement{sizeof(WINDOWPLACEMENT)}
@@ -24,7 +24,7 @@ namespace keplar
         shutdown();
     }
 
-    bool Win32Platform::initialize(const std::string& title, int width, int height) 
+    bool Win32Platform::initialize(const std::string& title, int width, int height) noexcept 
     {
         // convert title to wide string
         TCHAR appName[256];   
@@ -84,7 +84,7 @@ namespace keplar
         return true;
     }
 
-    void Win32Platform::pollEvents() 
+    void Win32Platform::pollEvents() noexcept 
     {
         MSG msg {};
         while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) 
@@ -94,12 +94,12 @@ namespace keplar
         }
     }
 
-    bool Win32Platform::shouldClose() 
+    bool Win32Platform::shouldClose() noexcept
     {
         return m_shouldClose;
     }
 
-    void Win32Platform::shutdown() 
+    void Win32Platform::shutdown() noexcept
     {
         // send destroy window message
         if (m_hwnd) 
@@ -109,7 +109,7 @@ namespace keplar
         }
     }
 
-    VkSurfaceKHR Win32Platform::createVulkanSurface(VkInstance vkInstance) const 
+    VkSurfaceKHR Win32Platform::createVulkanSurface(VkInstance vkInstance) const noexcept
     {
         VkSurfaceKHR vkSurfaceKHR = VK_NULL_HANDLE;  
         if (vkInstance == VK_NULL_HANDLE) 
@@ -129,22 +129,22 @@ namespace keplar
         return vkSurfaceKHR;
     }
 
-    std::vector<std::string_view> Win32Platform::getSurfaceInstanceExtensions() const 
+    std::vector<std::string_view> Win32Platform::getSurfaceInstanceExtensions() const noexcept
     {
         return { VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME };
     }
 
-    void* Win32Platform::getNativeWindowHandle() const 
+    void* Win32Platform::getNativeWindowHandle() const noexcept
     {
         return reinterpret_cast<void*>(m_hwnd);
     }
 
-    uint32_t Win32Platform::getWindowWidth() const 
+    uint32_t Win32Platform::getWindowWidth() const noexcept
     {
         return m_width;
     }
 
-    uint32_t Win32Platform::getWindowHeight() const 
+    uint32_t Win32Platform::getWindowHeight() const noexcept
     {
         return m_height;
     }

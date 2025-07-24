@@ -10,6 +10,7 @@
 
 namespace keplar
 {
+    // physical device details and scoring info
     struct VulkanDevice::PhysicalDeviceInfo
     {
         VkPhysicalDevice mVkPhysicalDevice;
@@ -20,7 +21,19 @@ namespace keplar
         uint64_t mScore;
     };
 
-    VulkanDevice::VulkanDevice()
+    std::unique_ptr<VulkanDevice> VulkanDevice::create(const VulkanInstance& instance, 
+                                                       const VulkanSurface& surface, 
+                                                       const VulkanContextConfig& config) noexcept
+    {
+        std::unique_ptr<VulkanDevice> device(new VulkanDevice);
+        if (!device->initialize(instance, surface, config))
+        {
+            return nullptr;
+        }
+        return device;
+    }
+
+    VulkanDevice::VulkanDevice() noexcept
         : m_vkInstance(VK_NULL_HANDLE)
         , m_vkPhysicalDevice(VK_NULL_HANDLE)
         , m_vkDevice(VK_NULL_HANDLE)
@@ -35,10 +48,20 @@ namespace keplar
 
     VulkanDevice::~VulkanDevice()
     {
-        destroy();
+        if (m_vkDevice != VK_NULL_HANDLE)
+        {
+            // queues are destroyed when logical device is destroyed
+            vkDestroyDevice(m_vkDevice, nullptr);
+            m_vkDevice = VK_NULL_HANDLE;
+            m_graphicsQueue = VK_NULL_HANDLE;
+            m_computeQueue = VK_NULL_HANDLE;
+            m_transferQueue = VK_NULL_HANDLE; 
+            m_vkInstance = VK_NULL_HANDLE;
+            VK_LOG_INFO("logical device destroyed successfully.");
+        }
     }
 
-    bool VulkanDevice::initialize(const VulkanInstance& instance, const VulkanSurface& surface, const VulkanContextConfig& config)
+    bool VulkanDevice::initialize(const VulkanInstance& instance, const VulkanSurface& surface, const VulkanContextConfig& config) noexcept
     {
         // store the VkInstance for resource creation and destruction
         m_vkInstance = instance.get();
@@ -73,76 +96,62 @@ namespace keplar
         return true;
     }
 
-    void VulkanDevice::destroy()
-    {
-        if (m_vkDevice)
-        {
-            // queues are destroyed when logical device is destroyed
-            vkDestroyDevice(m_vkDevice, nullptr);
-            m_vkDevice = VK_NULL_HANDLE;
-            m_graphicsQueue = VK_NULL_HANDLE;
-            m_computeQueue = VK_NULL_HANDLE;
-            m_transferQueue = VK_NULL_HANDLE; 
-            VK_LOG_INFO("logical device destroyed successfully.");
-        }
-    }
-
-    VkDevice VulkanDevice::getDevice() const
+    VkDevice VulkanDevice::getDevice() const noexcept
     {
         return m_vkDevice;
     }
 
-    VkPhysicalDevice VulkanDevice::getPhysicalDevice() const
+    VkPhysicalDevice VulkanDevice::getPhysicalDevice() const noexcept
     {
         return m_vkPhysicalDevice;
     }
 
-    QueueFamilyIndices VulkanDevice::getQueueFamilyIndices() const
+    QueueFamilyIndices VulkanDevice::getQueueFamilyIndices() const noexcept
     {
         return m_queueFamilyIndices;
     }
 
-    VkQueue VulkanDevice::getGraphicsQueue() const
+    VkQueue VulkanDevice::getGraphicsQueue() const noexcept
     {
         return m_graphicsQueue;
     }
 
-    VkQueue VulkanDevice::getPresentQueue() const
+    VkQueue VulkanDevice::getPresentQueue() const noexcept
     {
         return m_presentQueue;
     }
 
-    VkQueue VulkanDevice::getComputeQueue() const
+    VkQueue VulkanDevice::getComputeQueue() const noexcept
     {
         return m_computeQueue;
     }
 
-    VkQueue VulkanDevice::getTransferQueue() const
+    VkQueue VulkanDevice::getTransferQueue() const noexcept
     {
         return m_transferQueue;
     }
 
-    const VkPhysicalDeviceProperties& VulkanDevice::getPhysicalDeviceProperties() const
+    const VkPhysicalDeviceProperties& VulkanDevice::getPhysicalDeviceProperties() const noexcept
     {
         return m_vkPhysicalDeviceProperties;
     }
 
-    const VkPhysicalDeviceFeatures& VulkanDevice::getPhysicalDeviceFeatures() const
+    const VkPhysicalDeviceFeatures& VulkanDevice::getPhysicalDeviceFeatures() const noexcept
     {
         return m_vkPhysicalDeviceFeatures;
     }
 
-    const VkPhysicalDeviceMemoryProperties& VulkanDevice::getPhysicalDeviceMemoryProperties() const
+    const VkPhysicalDeviceMemoryProperties& VulkanDevice::getPhysicalDeviceMemoryProperties() const noexcept
     {
         return m_vkPhysicalDeviceMemoryProperties;
     }
 
-    bool VulkanDevice::isExtensionEnabled(const char* extensionName) const
+    bool VulkanDevice::isExtensionEnabled(const char* extensionName) const noexcept
     {
         return std::find(m_deviceConfig.mDeviceExtensions.begin(), m_deviceConfig.mDeviceExtensions.end(), extensionName) != m_deviceConfig.mDeviceExtensions.end();
     }
 
-    bool VulkanDevice::selectPhysicalDevice(const VulkanSurface& surface)
+    bool VulkanDevice::selectPhysicalDevice(const VulkanSurface& surface) noexcept
     {
         // query the number of vulkan compatible physical devices.
         uint32_t deviceCount = 0;
@@ -227,7 +236,7 @@ namespace keplar
         return true;
     }
 
-    bool VulkanDevice::createLogicalDevice()
+    bool VulkanDevice::createLogicalDevice() noexcept
     {
         // collect unique queue family indices
         std::unordered_set<uint32_t> uniqueQueueFamilies;
@@ -278,7 +287,7 @@ namespace keplar
         return true;
     }
 
-    bool VulkanDevice::getDeviceQueues()
+    bool VulkanDevice::getDeviceQueues() noexcept
     {
         // graphics queue (required)
         vkGetDeviceQueue(m_vkDevice, *m_queueFamilyIndices.mGraphicsFamily, 0, &m_graphicsQueue);
@@ -326,7 +335,7 @@ namespace keplar
         return true;
     }
 
-    QueueFamilyIndices VulkanDevice::findRequiredQueueFamilies(VkPhysicalDevice device, const VulkanSurface& surface) const 
+    QueueFamilyIndices VulkanDevice::findRequiredQueueFamilies(VkPhysicalDevice device, const VulkanSurface& surface) const noexcept
     {
         // query queue family count
         uint32_t queueFamilyCount = 0;
@@ -424,7 +433,7 @@ namespace keplar
         return indices;
     }
 
-    bool VulkanDevice::checkDeviceExtensionSupport(VkPhysicalDevice device) const 
+    bool VulkanDevice::checkDeviceExtensionSupport(VkPhysicalDevice device) const noexcept
     {
         // vulkan spec permits logical device creation without any extensions
         if (m_deviceConfig.mDeviceExtensions.empty())
@@ -467,7 +476,7 @@ namespace keplar
         return required.empty();
     }
 
-    uint64_t VulkanDevice::scoreDevice(const PhysicalDeviceInfo& physicalDeviceInfo) const
+    uint64_t VulkanDevice::scoreDevice(const PhysicalDeviceInfo& physicalDeviceInfo) const noexcept
     {
         uint64_t score = 0;
         const auto& properties = physicalDeviceInfo.mVkPhysicalDeviceProperties;
@@ -514,7 +523,7 @@ namespace keplar
         return score;
     }
 
-    void VulkanDevice::logPhysicalDeviceInfo(const PhysicalDeviceInfo& physicalDeviceInfo) const
+    void VulkanDevice::logPhysicalDeviceInfo(const PhysicalDeviceInfo& physicalDeviceInfo) const noexcept
     {
         const auto& properties = physicalDeviceInfo.mVkPhysicalDeviceProperties;
         const auto& indices = physicalDeviceInfo.mQueueFamilyIndices;
@@ -544,7 +553,7 @@ namespace keplar
         }
     }
 
-    void VulkanDevice::validateRequestedFeatures()
+    void VulkanDevice::validateRequestedFeatures() noexcept
     {
         // array of pairs: pointer-to-member + feature name
         constexpr std::pair<VkBool32 VkPhysicalDeviceFeatures::*, const char*> featureMap[] = 

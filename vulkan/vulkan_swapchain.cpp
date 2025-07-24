@@ -10,7 +10,19 @@
 
 namespace keplar
 {
-    VulkanSwapchain::VulkanSwapchain()
+    std::unique_ptr<VulkanSwapchain> VulkanSwapchain::create(const VulkanSurface& surface, 
+                                                             const VulkanDevice& device, 
+                                                             VkExtent2D windowExtent) noexcept 
+    {
+        std::unique_ptr<VulkanSwapchain> swapchain(new VulkanSwapchain);
+        if (!swapchain->initialize(surface, device, windowExtent))
+        {
+            return nullptr;
+        }
+        return swapchain;
+    }
+
+    VulkanSwapchain::VulkanSwapchain() noexcept
         : m_vkSwapchainKHR(VK_NULL_HANDLE)
         , m_vkSurfaceFormatKHR{}
         , m_imageCount(0)
@@ -21,10 +33,27 @@ namespace keplar
 
     VulkanSwapchain::~VulkanSwapchain()
     {
-        destroy();
+        for (auto& view : m_imageViews)
+        {
+            if (view != VK_NULL_HANDLE)
+            {
+                vkDestroyImageView(m_vkDevice, view, nullptr);
+                view = VK_NULL_HANDLE; 
+            }
+        }
+
+        VK_LOG_INFO("swapchain image views destroyed successfully");
+        if (m_vkSwapchainKHR != VK_NULL_HANDLE)
+        {
+            // swapchain images are destroyed when swapchain is destroyed
+            vkDestroySwapchainKHR(m_vkDevice, m_vkSwapchainKHR, nullptr);
+            m_vkSwapchainKHR = VK_NULL_HANDLE;
+            m_vkDevice = VK_NULL_HANDLE;
+            VK_LOG_INFO("swapchain destroyed successfully");
+        }
     }
 
-    bool VulkanSwapchain::initialize(const VulkanSurface& surface, const VulkanDevice& device, VkExtent2D windowExtent)
+    bool VulkanSwapchain::initialize(const VulkanSurface& surface, const VulkanDevice& device, VkExtent2D windowExtent) noexcept
     {
         // validate window extent
         if (!windowExtent.width || !windowExtent.height)
@@ -78,68 +107,47 @@ namespace keplar
         return true;
     }
 
-    void VulkanSwapchain::destroy()
-    {
-        for (auto& view : m_imageViews)
-        {
-            if (view != VK_NULL_HANDLE)
-            {
-                vkDestroyImageView(m_vkDevice, view, nullptr);
-                view = VK_NULL_HANDLE; 
-            }
-        }
-
-        VK_LOG_INFO("swapchain image views destroyed successfully");
-        if (m_vkSwapchainKHR)
-        {
-            // swapchain images are destroyed when swapchain is destroyed
-            vkDestroySwapchainKHR(m_vkDevice, m_vkSwapchainKHR, nullptr);
-            m_vkSwapchainKHR = VK_NULL_HANDLE;
-            VK_LOG_INFO("swapchain destroyed successfully");
-        }
-    }
-
-    VkSwapchainKHR VulkanSwapchain::get() const
+    VkSwapchainKHR VulkanSwapchain::get() const noexcept
     {
         return m_vkSwapchainKHR;
     }
 
-    VkFormat VulkanSwapchain::getFormat() const
+    VkFormat VulkanSwapchain::getFormat() const noexcept
     {
         return m_vkSurfaceFormatKHR.format;
     }
 
-    VkColorSpaceKHR VulkanSwapchain::getColorSpace() const
+    VkColorSpaceKHR VulkanSwapchain::getColorSpace() const noexcept
     {
         return m_vkSurfaceFormatKHR.colorSpace;
     }
     
-    VkPresentModeKHR VulkanSwapchain::getPresentMode() const
+    VkPresentModeKHR VulkanSwapchain::getPresentMode() const noexcept
     {
         return m_vkPresentModeKHR;
     }
 
-    VkExtent2D VulkanSwapchain::getExtent() const
+    VkExtent2D VulkanSwapchain::getExtent() const noexcept
     {
         return m_imageExtent;
     }
 
-    uint32_t VulkanSwapchain::getImageCount() const
+    uint32_t VulkanSwapchain::getImageCount() const noexcept
     {
         return m_imageCount;
     }
 
-    const std::vector<VkImage>& VulkanSwapchain::getImages() const
+    const std::vector<VkImage>& VulkanSwapchain::getImages() const noexcept
     {
         return m_images;
     }
     
-    const std::vector<VkImageView>& VulkanSwapchain::getImageViews() const
+    const std::vector<VkImageView>& VulkanSwapchain::getImageViews() const noexcept
     {
         return m_imageViews;
     }
 
-    void VulkanSwapchain::chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& surfaceFormats)
+    void VulkanSwapchain::chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& surfaceFormats) noexcept
     {
         // if the surface has no preferred format choose the best format
         if (surfaceFormats.size() == 1 && surfaceFormats[0].format == VK_FORMAT_UNDEFINED)
@@ -164,7 +172,7 @@ namespace keplar
         m_vkSurfaceFormatKHR = surfaceFormats[0];
     }
 
-    void VulkanSwapchain::choosePresentMode(const std::vector<VkPresentModeKHR>& presentModes)
+    void VulkanSwapchain::choosePresentMode(const std::vector<VkPresentModeKHR>& presentModes) noexcept
     {
         // prefer VK_PRESENT_MODE_MAILBOX_KHR if available 
         for (const auto& presentMode : presentModes)
@@ -181,7 +189,7 @@ namespace keplar
         m_vkPresentModeKHR = VK_PRESENT_MODE_FIFO_KHR;
     }
 
-    void VulkanSwapchain::chooseImageCount(const VkSurfaceCapabilitiesKHR& surfaceCapabilities)
+    void VulkanSwapchain::chooseImageCount(const VkSurfaceCapabilitiesKHR& surfaceCapabilities) noexcept
     {
         // start with one more than the minimum image count to enable triple buffering
         uint32_t desiredImageCount = surfaceCapabilities.minImageCount + 1;
@@ -195,7 +203,7 @@ namespace keplar
         m_imageCount = desiredImageCount;
     }
 
-    void VulkanSwapchain::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& surfaceCapabilities, VkExtent2D windowExtent)
+    void VulkanSwapchain::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& surfaceCapabilities, VkExtent2D windowExtent) noexcept
     {
         if (surfaceCapabilities.currentExtent.width != UINT32_MAX)
         {
@@ -210,7 +218,7 @@ namespace keplar
         }
     }
 
-    void VulkanSwapchain::choosePreTransform(const VkSurfaceCapabilitiesKHR& surfaceCapabilities)
+    void VulkanSwapchain::choosePreTransform(const VkSurfaceCapabilitiesKHR& surfaceCapabilities) noexcept
     {
         if (surfaceCapabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
         {
@@ -222,7 +230,7 @@ namespace keplar
         }
     }
 
-    bool VulkanSwapchain::createSwapchain(VkSurfaceKHR surface, QueueFamilyIndices indices)
+    bool VulkanSwapchain::createSwapchain(VkSurfaceKHR surface, QueueFamilyIndices indices) noexcept
     {
         // setup swapchain create info
         VkSwapchainCreateInfoKHR vkSwapchainCreateInfoKHR{};
@@ -277,7 +285,7 @@ namespace keplar
         return true;
     }
 
-    bool VulkanSwapchain::recreateSwapchain(const VulkanSurface& surface, const VulkanDevice& device, VkExtent2D windowExtent)
+    bool VulkanSwapchain::recreateSwapchain(const VulkanSurface& surface, const VulkanDevice& device, VkExtent2D windowExtent) noexcept
     {
         VK_LOG_INFO("recreateSwapchain :: starting swapchain recreation.");
 
@@ -360,7 +368,7 @@ namespace keplar
         return true;
     }
 
-    bool VulkanSwapchain::createImageViews()
+    bool VulkanSwapchain::createImageViews() noexcept
     {
         // query swapchain image count
         uint32_t swapchainImageCount = 0;

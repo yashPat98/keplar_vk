@@ -12,19 +12,19 @@ namespace keplar
     class Win32Platform : public Platform
     {
         public:
-            Win32Platform();
+            Win32Platform() noexcept;
             virtual ~Win32Platform() override;
 
-            virtual bool initialize(const std::string& title, int width, int height) override;
-            virtual void pollEvents() override;
-            virtual bool shouldClose() override;
-            virtual void shutdown() override;
+            virtual bool initialize(const std::string& title, int width, int height) noexcept override;
+            virtual void pollEvents() noexcept override;
+            virtual bool shouldClose() noexcept override;
+            virtual void shutdown() noexcept override;
 
-            virtual VkSurfaceKHR createVulkanSurface(VkInstance vkInstance) const override;
-            virtual std::vector<std::string_view> getSurfaceInstanceExtensions() const override;
-            virtual void* getNativeWindowHandle() const override;
-            virtual uint32_t getWindowWidth() const override;
-            virtual uint32_t getWindowHeight() const override;
+            virtual VkSurfaceKHR createVulkanSurface(VkInstance vkInstance) const noexcept override;
+            virtual std::vector<std::string_view> getSurfaceInstanceExtensions() const noexcept override;
+            virtual void* getNativeWindowHandle() const noexcept override;
+            virtual uint32_t getWindowWidth() const noexcept override;
+            virtual uint32_t getWindowHeight() const noexcept override;
 
         private:
             void toggleFullscreen();

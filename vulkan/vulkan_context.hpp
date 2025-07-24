@@ -17,22 +17,20 @@ namespace keplar
     class VulkanContext
     {
         public: 
+            // creation and destruction
             class Builder;
             virtual ~VulkanContext();
 
             // disable copy and move semantics to enforce unique ownership
             VulkanContext(const VulkanContext&) = delete;
             VulkanContext& operator=(const VulkanContext&) = delete;
-            VulkanContext(VulkanContext&&) noexcept = delete;
-            VulkanContext& operator=(VulkanContext&&) noexcept = delete;
-
-            // explicit resource cleanup
-            void destroy();
+            VulkanContext(VulkanContext&&) = delete;
+            VulkanContext& operator=(VulkanContext&&) = delete;
 
         private:
             // only accessible by builder for controlled construction and initialization
-            VulkanContext();
-            bool initialize(const Platform& platform, const VulkanContextConfig& config);
+            VulkanContext() noexcept;
+            bool initialize(const Platform& platform, const VulkanContextConfig& config) noexcept;
 
         private:
             std::unique_ptr<VulkanInstance> m_vulkanInstance;
