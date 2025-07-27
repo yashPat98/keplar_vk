@@ -7,6 +7,7 @@
 #include <memory>
 #include "platform/platform.hpp"
 #include "vulkan/vulkan_context.hpp"
+#include "renderer/renderer.hpp"
 
 namespace keplar
 {
@@ -31,5 +32,6 @@ namespace keplar
         private:
             std::unique_ptr<Platform> m_platform;
             std::unique_ptr<VulkanContext> m_vulkanContext;
+            std::unique_ptr<Renderer> m_renderer;
     };
 }   // namespace keplar

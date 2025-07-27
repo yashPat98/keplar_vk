@@ -38,7 +38,7 @@ namespace keplar
             return false;
         }
 
-        // create vulkan context using the builder pattern 
+        // build the vulkan context with required configuration
         m_vulkanContext = VulkanContext::Builder::Builder()
                             .withPlatform(*m_platform)
                             .withInstanceExtensionsIfValidation({ VK_EXT_DEBUG_UTILS_EXTENSION_NAME })
@@ -50,6 +50,14 @@ namespace keplar
             return false;
         }
 
+        // setup and initialize renderer using context reference
+        m_renderer = std::make_unique<Renderer>(*m_vulkanContext);
+        if (!m_renderer->initialize())
+        {
+            return false;
+        }
+
+        VK_LOG_INFO("KeplarApp::initialize successful");
         return true;
     }
 
@@ -65,6 +73,7 @@ namespace keplar
     void KeplarApp::shutdown() noexcept
     {
         // explicitly destroy resources in a reverse order:
+        m_renderer.reset();
         m_vulkanContext.reset();
         m_platform.reset();
     }

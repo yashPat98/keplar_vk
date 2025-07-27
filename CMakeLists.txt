@@ -31,6 +31,7 @@ file(GLOB_RECURSE CORE_SRC     CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/core/*.cpp 
 file(GLOB_RECURSE PLATFORM_SRC CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/platform/*.cpp ${CMAKE_SOURCE_DIR}/platform/*.hpp)
 file(GLOB_RECURSE UTILS_SRC    CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/utils/*.cpp ${CMAKE_SOURCE_DIR}/utils/*.hpp)
 file(GLOB_RECURSE VULKAN_SRC   CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/vulkan/*.cpp ${CMAKE_SOURCE_DIR}/vulkan/*.hpp)
+file(GLOB_RECURSE RENDERER_SRC CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/renderer/*.cpp ${CMAKE_SOURCE_DIR}/renderer/*.hpp)
 
 set(MAIN_SRC ${CMAKE_SOURCE_DIR}/main.cpp)
 
@@ -40,6 +41,7 @@ set(KEPLAR_SRC
     ${PLATFORM_SRC}
     ${UTILS_SRC}
     ${VULKAN_SRC}
+    ${RENDERER_SRC}
 )
 
 # ───────────────────────────────────────────────
@@ -84,6 +86,7 @@ source_group(TREE ${CMAKE_SOURCE_DIR}/core     PREFIX "core"     FILES ${CORE_SR
 source_group(TREE ${CMAKE_SOURCE_DIR}/platform PREFIX "platform" FILES ${PLATFORM_SRC})
 source_group(TREE ${CMAKE_SOURCE_DIR}/utils    PREFIX "utils"    FILES ${UTILS_SRC})
 source_group(TREE ${CMAKE_SOURCE_DIR}/vulkan   PREFIX "vulkan"   FILES ${VULKAN_SRC})
+source_group(TREE ${CMAKE_SOURCE_DIR}/renderer PREFIX "renderer" FILES ${RENDERER_SRC})
 source_group("" FILES ${MAIN_SRC})
 
 # ───────────────────────────────────────────────
