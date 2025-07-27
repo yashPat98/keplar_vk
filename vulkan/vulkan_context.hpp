@@ -27,6 +27,12 @@ namespace keplar
             VulkanContext(VulkanContext&&) = delete;
             VulkanContext& operator=(VulkanContext&&) = delete;
 
+            // accessors return const references to wrappers; guaranteed to be initialized.
+            const VulkanInstance& getInstance() const noexcept { return *m_vulkanInstance; }
+            const VulkanSurface& getSurface() const noexcept { return *m_vulkanSurface; }
+            const VulkanDevice& getDevice() const noexcept { return *m_vulkanDevice; }
+            const VulkanSwapchain& getSwapchain() const noexcept { return *m_vulkanSwapchain; }
+
         private:
             // only accessible by builder for controlled construction and initialization
             VulkanContext() noexcept;
