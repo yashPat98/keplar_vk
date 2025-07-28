@@ -215,7 +215,7 @@ namespace keplar
         }
 
         // create and initialize VulkanContext
-        auto vulkanContext = std::unique_ptr<VulkanContext>(new VulkanContext());
+        auto vulkanContext = std::unique_ptr<VulkanContext>(new VulkanContext);
         if (!vulkanContext->initialize(*m_platform, m_vulkanContextConfig))
         {
             VK_LOG_FATAL("VulkanContext::Builder::build :: failed to build VulkanContext");

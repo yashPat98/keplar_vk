@@ -11,7 +11,7 @@ namespace keplar
     // forward declarations
     class VulkanCommandPool;
 
-    class VulkanCommandBuffer
+    class VulkanCommandBuffer final
     {
         public:
             // creation and destruction

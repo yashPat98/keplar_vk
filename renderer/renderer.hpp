@@ -5,6 +5,9 @@
 #pragma once
 
 #include "vulkan/vulkan_context.hpp"
+#include "vulkan/vulkan_command_pool.hpp"
+#include "vulkan/vulkan_command_buffer.hpp"
+#include "vulkan/vulkan_render_pass.hpp"
 
 namespace keplar
 {
@@ -24,8 +27,17 @@ namespace keplar
             bool initialize() noexcept;
 
         private:
-            // vulkan wrapper objects owned by context
-            const VulkanDevice& m_vulkanDevice;
-            const VulkanSwapchain& m_vulkanSwapchain;
+            bool createCommandBuffers();
+            bool createRenderPasses();
+
+        private:
+            // immutable Vulkan handles owned by context
+            const VulkanDevice&                 m_vulkanDevice;
+            const VulkanSwapchain&              m_vulkanSwapchain;
+
+            VulkanCommandPool                   m_commandPool;
+            std::vector<VulkanCommandBuffer>    m_commandBuffers;
+            VulkanRenderPass                    m_renderPass;
+            uint32_t                            m_swapchainImageCount;
     };
 }   // namespace keplar
