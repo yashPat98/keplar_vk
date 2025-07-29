@@ -10,7 +10,9 @@ namespace keplar
     Renderer::Renderer(const VulkanContext& context) noexcept
         : m_vulkanDevice(context.getDevice())
         , m_vulkanSwapchain(context.getSwapchain())
+        , m_vkDevice(m_vulkanDevice.getDevice())
         , m_swapchainImageCount(m_vulkanSwapchain.getImageCount())
+        , m_framebuffers(m_swapchainImageCount)
     {
     }
 
@@ -30,16 +32,29 @@ namespace keplar
             return false;
         }
 
+        if (!createFramebuffers())
+        {
+            return false;
+        }
+
+        VK_LOG_DEBUG("Renderer::initialize successful");
         return true;
     }
 
     bool Renderer::createCommandBuffers()
     {
         // setup command pool for graphics queue
-        const auto graphicsFamilyIndex  = m_vulkanDevice.getQueueFamilyIndices().mGraphicsFamily;
-        constexpr VkCommandPoolCreateFlags poolFlags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        const auto graphicsFamilyIndex = m_vulkanDevice.getQueueFamilyIndices().mGraphicsFamily;
 
-        if (!m_commandPool.initialize(m_vulkanDevice.getDevice(), graphicsFamilyIndex .value(), poolFlags))
+        // command pool creation info
+        VkCommandPoolCreateInfo vkCommandPoolCreateInfo{};
+        vkCommandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        vkCommandPoolCreateInfo.pNext = nullptr;
+        vkCommandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        vkCommandPoolCreateInfo.queueFamilyIndex = graphicsFamilyIndex .value();
+
+        // setup command pool
+        if (!m_commandPool.initialize(m_vkDevice, vkCommandPoolCreateInfo))
         {
             VK_LOG_ERROR("Renderer::createCommandBuffers : failed to initialize command pool.");
             return false;
@@ -53,6 +68,7 @@ namespace keplar
             return false;
         }
 
+        VK_LOG_DEBUG("Renderer::createCommandBuffers successful");
         return true;
     }
 
@@ -99,12 +115,45 @@ namespace keplar
         std::vector<VkSubpassDescription> subpasses { subpass };
 
         // setup render pass with specified attachments, subpasses and dependencies
-        if (!m_renderPass.initialize(m_vulkanDevice.getDevice(), attachments, subpasses))
+        if (!m_renderPass.initialize(m_vkDevice, attachments, subpasses))
         {
             VK_LOG_ERROR("Renderer::createRenderPasses failed to initialize render pass");
             return false;
         }
 
+        VK_LOG_DEBUG("Renderer::createRenderPasses successful");
+        return true;
+    }
+
+    bool Renderer::createFramebuffers()
+    {
+        // get swapchain properties
+        const auto swapchainImageViews = m_vulkanSwapchain.getImageViews();
+        const auto swapchainExtent = m_vulkanSwapchain.getExtent();
+
+        // common framebuffer creation info
+        VkFramebufferCreateInfo framebufferCreateInfo{};
+        framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferCreateInfo.pNext = nullptr;
+        framebufferCreateInfo.flags = 0;
+        framebufferCreateInfo.renderPass = m_renderPass.get();
+        framebufferCreateInfo.attachmentCount = 1;
+        framebufferCreateInfo.width = swapchainExtent.width;
+        framebufferCreateInfo.height = swapchainExtent.height;
+        framebufferCreateInfo.layers = 1;
+
+        // create one framebuffer per swapchain image view
+        for (uint32_t i = 0; i < m_swapchainImageCount; ++i)
+        {
+            framebufferCreateInfo.pAttachments = &swapchainImageViews[i];
+            if (!m_framebuffers[i].initialize(m_vkDevice, framebufferCreateInfo))
+            {
+                VK_LOG_ERROR("Renderer::createFramebuffers failed to initialize framebuffer : %u", i);
+                return false;
+            }
+        }
+
+        VK_LOG_DEBUG("Renderer::createFramebuffers successful");
         return true;
     }
 }   // namespace keplar

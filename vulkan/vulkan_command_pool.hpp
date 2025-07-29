@@ -26,13 +26,14 @@ namespace keplar
             VulkanCommandPool& operator=(VulkanCommandPool&&) = delete; 
             
             // pool operations
-            bool initialize(VkDevice vkDevice, uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags) noexcept;
+            bool initialize(VkDevice vkDevice, const VkCommandPoolCreateInfo& createInfo) noexcept;
             bool reset(VkCommandPoolResetFlags flags = 0) noexcept;
             void trim(VkCommandPoolTrimFlags flags = 0) noexcept;
 
             // command buffer allocation
             std::optional<VulkanCommandBuffer> allocate(VkCommandBufferLevel level) noexcept;
             std::vector<VulkanCommandBuffer> allocate(uint32_t count, VkCommandBufferLevel level) noexcept;
+            void freeCommandBuffers(const std::vector<VulkanCommandBuffer>& commandBuffers) noexcept;
 
             // accessors
             VkCommandPool get() const noexcept { return m_vkCommandPool; }

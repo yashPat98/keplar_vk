@@ -8,6 +8,7 @@
 #include "vulkan/vulkan_command_pool.hpp"
 #include "vulkan/vulkan_command_buffer.hpp"
 #include "vulkan/vulkan_render_pass.hpp"
+#include "vulkan/vulkan_framebuffer.hpp"
 
 namespace keplar
 {
@@ -29,15 +30,21 @@ namespace keplar
         private:
             bool createCommandBuffers();
             bool createRenderPasses();
+            bool createFramebuffers();
 
         private:
-            // immutable Vulkan handles owned by context
+            // immutable core vulkan components provided by context
             const VulkanDevice&                 m_vulkanDevice;
             const VulkanSwapchain&              m_vulkanSwapchain;
 
+            // vulkan handles
+            VkDevice                            m_vkDevice;
+
+            // rendering resources and state
+            uint32_t                            m_swapchainImageCount;
             VulkanCommandPool                   m_commandPool;
             std::vector<VulkanCommandBuffer>    m_commandBuffers;
             VulkanRenderPass                    m_renderPass;
-            uint32_t                            m_swapchainImageCount;
+            std::vector<VulkanFramebuffer>      m_framebuffers;
     };
 }   // namespace keplar

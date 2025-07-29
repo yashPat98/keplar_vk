@@ -35,7 +35,7 @@ namespace keplar
         }
     }
 
-    bool VulkanCommandPool::initialize(VkDevice vkDevice, uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags) noexcept
+    bool VulkanCommandPool::initialize(VkDevice vkDevice, const VkCommandPoolCreateInfo& createInfo) noexcept
     {
         // validate device handle
         if (vkDevice == VK_NULL_HANDLE)
@@ -44,25 +44,17 @@ namespace keplar
             return false;
         }
 
-        // store device and queue family index
-        m_vkDevice = vkDevice;
-        m_queueFamilyIndex = queueFamilyIndex;
-
-        // set up command pool creation info
-        VkCommandPoolCreateInfo vkCommandPoolCreateInfo{};
-        vkCommandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        vkCommandPoolCreateInfo.pNext = nullptr;
-        vkCommandPoolCreateInfo.flags = flags;
-        vkCommandPoolCreateInfo.queueFamilyIndex = m_queueFamilyIndex.value();
-
         // create the command pool
-        VkResult vkResult = vkCreateCommandPool(m_vkDevice, &vkCommandPoolCreateInfo, nullptr, &m_vkCommandPool);
+        VkResult vkResult = vkCreateCommandPool(vkDevice, &createInfo, nullptr, &m_vkCommandPool);
         if (vkResult != VK_SUCCESS)
         {
             VK_LOG_FATAL("vkCreateCommandPool failed to create command pool : %s (code: %d)", string_VkResult(vkResult), vkResult);
             return false;
         }
 
+        // store device and queue family index
+        m_vkDevice = vkDevice;
+        m_queueFamilyIndex = createInfo.queueFamilyIndex;
         VK_LOG_INFO("vulkan command pool created successfully");
         return true;
     }
@@ -132,5 +124,37 @@ namespace keplar
 
         VK_LOG_INFO("command buffers allocated from pool successfully");
         return commandBuffers;
+    }
+
+    void VulkanCommandPool::freeCommandBuffers(const std::vector<VulkanCommandBuffer>& commandBuffers) noexcept
+    {
+        // validate input
+        if (commandBuffers.empty())
+        {
+            VK_LOG_WARN("VulkanCommandPool::freeCommandBuffers : no command buffers passed");
+            return;
+        }
+
+        // extract raw VkCommandBuffer handles
+        std::vector<VkCommandBuffer> vkCommandBuffers;
+        vkCommandBuffers.reserve(commandBuffers.size());
+        for (const auto& buffer : commandBuffers)
+        {
+            vkCommandBuffers.emplace_back(buffer.get());
+        }
+
+        // free command buffers from the Vulkan command pool
+        vkFreeCommandBuffers(m_vkDevice, m_vkCommandPool, static_cast<uint32_t>(vkCommandBuffers.size()), vkCommandBuffers.data());
+        VK_LOG_INFO("command buffers freed successfully : %zu", vkCommandBuffers.size()); 
+
+        // remove freed buffers 
+        for (auto elm : vkCommandBuffers)
+        {
+            auto it = std::find(m_ownedCommandBuffers.begin(), m_ownedCommandBuffers.end(), elm);
+            if (it != m_ownedCommandBuffers.end())
+            {
+                m_ownedCommandBuffers.erase(it);
+            }
+        }
     }
 }   // namespace keplar

@@ -14,7 +14,7 @@ namespace keplar
 
     VulkanRenderPass::~VulkanRenderPass()
     {
-        // destroy renderpass
+        // destroy render pass
         if (m_vkRenderPass != VK_NULL_HANDLE)
         {
             vkDestroyRenderPass(m_vkDevice, m_vkRenderPass, nullptr);
