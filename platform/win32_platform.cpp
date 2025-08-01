@@ -36,7 +36,7 @@ namespace keplar
 		WNDCLASSEX wndclass {};
         wndclass.cbSize         = sizeof(WNDCLASSEX);                               
         wndclass.style          = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;              
-        wndclass.lpfnWndProc    = WndProc;                                         
+        wndclass.lpfnWndProc    = Win32Platform::WndProc;                                         
         wndclass.cbClsExtra     = 0;                                                
         wndclass.cbWndExtra     = 0;                                                
         wndclass.hInstance      = m_hInstance;                                   
@@ -81,6 +81,7 @@ namespace keplar
         ShowWindow(m_hwnd, SW_SHOWDEFAULT);
 		SetForegroundWindow(m_hwnd);
 		SetFocus(m_hwnd);
+        VK_LOG_INFO("window is created successfully.");
         return true;
     }
 
@@ -89,11 +90,19 @@ namespace keplar
         MSG msg {};
         while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) 
         {
+            // signal render loop to exit
+            if (msg.message == WM_QUIT)
+            {
+                m_shouldClose = true;
+                break;
+            }
+            
+            // translate and dispatch to wndProc
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
     }
-
+ 
     bool Win32Platform::shouldClose() noexcept
     {
         return m_shouldClose;
@@ -101,11 +110,12 @@ namespace keplar
 
     void Win32Platform::shutdown() noexcept
     {
-        // send destroy window message
+        // destroy window 
         if (m_hwnd) 
         {
             DestroyWindow(m_hwnd);
             m_hwnd = nullptr;
+            VK_LOG_INFO("window is destroyed successfully");
         }
     }
 
@@ -159,6 +169,13 @@ namespace keplar
 
         switch (iMsg)
         {
+            case WM_CLOSE:
+                // prevent default window destruction by DefWindowProc 
+                // to ensure window and vulkan surface remains valid until 
+                // render loop is exited gracefully
+                PostQuitMessage(0);
+                return 0;
+
             case WM_SIZE:
                 if (wParam != SIZE_MINIMIZED)
                 {
@@ -171,7 +188,7 @@ namespace keplar
                 switch (wParam)
                 {
                     case VK_ESCAPE:
-                        platform->m_shouldClose = true;
+                        PostQuitMessage(0);
                         break;
 
                     case VK_F11:
@@ -181,15 +198,6 @@ namespace keplar
                     default:
                         break;
                 }
-                break;
-
-            case WM_CLOSE:
-                DestroyWindow(hwnd);
-                break;
-
-            case WM_DESTROY:
-                platform->m_shouldClose = true;
-                PostQuitMessage(0);
                 break;
 
             default:

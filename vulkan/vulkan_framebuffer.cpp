@@ -3,7 +3,6 @@
 // ────────────────────────────────────────────
 
 #include "vulkan_framebuffer.hpp"
-#include "vk_utils.hpp"
 #include "utils/logger.hpp"
 
 namespace keplar

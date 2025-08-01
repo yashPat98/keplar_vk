@@ -66,6 +66,7 @@ namespace keplar
         while (!m_platform->shouldClose())
         {
             m_platform->pollEvents();
+            m_renderer->renderFrame();              
         }
         return true;
     }

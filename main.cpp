@@ -7,12 +7,10 @@
 
 int main([[maybe_unused]]int argc, [[maybe_unused]] char* argv[])
 {
-    using namespace keplar;
-
     // start the logging thread early
-    auto& logger = Logger::getInstance();
+    auto& logger = keplar::Logger::getInstance();
 
-    KeplarApp app;
+    keplar::KeplarApp app;
     if (!app.initialize())
     {
         VK_LOG_FATAL("failed to initialize Keplar application");

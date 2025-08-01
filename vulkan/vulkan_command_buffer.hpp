@@ -31,6 +31,10 @@ namespace keplar
             bool end() noexcept;
             bool reset(VkCommandBufferResetFlags flags = 0) noexcept;
 
+            // render pass helpers
+            void beginRenderPass(const VkRenderPassBeginInfo& beginInfo, VkSubpassContents contents) noexcept;
+            void endRenderPass() noexcept;
+
             // accessor
             VkCommandBuffer get() const noexcept { return m_vkCommandBuffer; }
 

@@ -4,6 +4,7 @@
 
 #include "renderer.hpp"
 #include "utils/logger.hpp"
+#include "vulkan/vk_utils.hpp"
 
 namespace keplar
 {
@@ -11,33 +12,111 @@ namespace keplar
         : m_vulkanDevice(context.getDevice())
         , m_vulkanSwapchain(context.getSwapchain())
         , m_vkDevice(m_vulkanDevice.getDevice())
+        , m_vkSwapchainKHR(m_vulkanSwapchain.get())
+        , m_presentQueue(m_vulkanDevice.getPresentQueue())
+        , m_graphicsQueue(m_vulkanDevice.getGraphicsQueue())
         , m_swapchainImageCount(m_vulkanSwapchain.getImageCount())
+        , m_maxFramesInFlight(min(3u, m_swapchainImageCount - 1u))
+        , m_currentImageIndex(0)
+        , m_currentFrameIndex(0)
         , m_framebuffers(m_swapchainImageCount)
+        , m_frameSyncPrimitives(m_maxFramesInFlight)
+        , m_readyToRender(false)
     {
+        // vulkan spec suggests max frames in flight should be less than swapchain image count
+        // to prevent CPU stalling while waiting for an image to become available for rendering.
+        // setting an upper limit of 3 balances throughput and avoids stalls.
+        VK_LOG_INFO("Renderer::Renderer max frames in flight : %d", m_maxFramesInFlight);
     }
 
     Renderer::~Renderer()
     {
+        // ensure no rendering is in progress and wait for GPU to finish all submitted work
+        m_readyToRender.store(false); 
+        vkDeviceWaitIdle(m_vkDevice); 
     }
 
     bool Renderer::initialize() noexcept
     {
-        if (!createCommandBuffers())
-        {
-            return false;
-        }
-
-        if (!createRenderPasses())
-        {
-            return false;
-        }
-
-        if (!createFramebuffers())
-        {
-            return false;
-        }
-
+        if (!createCommandBuffers()) { return false; }
+        if (!createRenderPasses()) { return false; }
+        if (!createFramebuffers()) { return false; }
+        if (!createSyncPrimitives()) { return false; }
+        if (!buildCommandBuffers()) { return false; }
+        
+        m_readyToRender.store(true);
         VK_LOG_DEBUG("Renderer::initialize successful");
+        return true;
+    }
+
+    bool Renderer::renderFrame() noexcept
+    {
+        // 1️⃣ ensure initialization is completed before rendering 
+        if (!m_readyToRender.load())
+        {
+            VK_LOG_WARN("Renderer::renderFrame : initialization is not complete");
+            return false;
+        }
+
+        // 2️⃣ get sync primitives for current frame
+        auto& frameSync = m_frameSyncPrimitives[m_currentFrameIndex];
+
+        // 3️⃣ wait on the fence for this frame to ensure GPU finished work from last time
+        // This prevents CPU from submitting commands for the same frame while GPU is still using it
+        if (!frameSync.mInFlightFence.wait() || !frameSync.mInFlightFence.reset())
+        {
+            return false;
+        }
+
+        // 4️⃣ acquire next image from swapchain, signaling the image available semaphore 
+        if (!VK_CHECK(vkAcquireNextImageKHR(m_vkDevice, m_vkSwapchainKHR, UINT64_MAX, frameSync.mImageAvailableSemaphore.get(), VK_NULL_HANDLE, &m_currentImageIndex)))
+        {
+            // handle swapchain recreation errors
+            return false;
+        }
+
+        // 5️⃣ prepare submit info to submit command buffer with sync info
+        const VkPipelineStageFlags waitDstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        VkSemaphore waitSemaphore = frameSync.mImageAvailableSemaphore.get();
+        VkSemaphore signalSemaphore = frameSync.mRenderCompleteSemaphore.get();
+        VkCommandBuffer commandBuffer = m_commandBuffers[m_currentImageIndex].get();
+
+        // setup queue submit info
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.pNext = nullptr;
+        submitInfo.pWaitDstStageMask = &waitDstStageMask;
+        submitInfo.waitSemaphoreCount = 1;
+        submitInfo.pWaitSemaphores = &waitSemaphore;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &commandBuffer;
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores = &signalSemaphore;
+
+        // 6️⃣ submit command buffer to graphics queue with fence to track GPU work
+        if (!VK_CHECK(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, frameSync.mInFlightFence.get())))
+        {
+            return false;
+        }
+
+        // 7️⃣ prepare present info to present the rendered image
+        VkPresentInfoKHR presentInfo{};
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.pNext = nullptr;
+        presentInfo.waitSemaphoreCount = 1;
+        presentInfo.pWaitSemaphores = &signalSemaphore;
+        presentInfo.swapchainCount = 1;
+        presentInfo.pSwapchains = &m_vkSwapchainKHR;
+        presentInfo.pImageIndices = &m_currentImageIndex;
+
+        // 8️⃣ queue the present operation
+        if (!VK_CHECK(vkQueuePresentKHR(m_presentQueue, &presentInfo)))
+        {
+            return false;
+        }
+
+        // 9️⃣ advance to the next frame sync object (cycling through available frames in flight)
+        m_currentFrameIndex = (m_currentFrameIndex + 1) % m_maxFramesInFlight;
         return true;
     }
 
@@ -142,7 +221,7 @@ namespace keplar
         framebufferCreateInfo.height = swapchainExtent.height;
         framebufferCreateInfo.layers = 1;
 
-        // create one framebuffer per swapchain image view
+        // create framebuffer per swapchain image view
         for (uint32_t i = 0; i < m_swapchainImageCount; ++i)
         {
             framebufferCreateInfo.pAttachments = &swapchainImageViews[i];
@@ -154,6 +233,96 @@ namespace keplar
         }
 
         VK_LOG_DEBUG("Renderer::createFramebuffers successful");
+        return true;
+    }
+
+    bool Renderer::createSyncPrimitives()
+    {
+        // semaphore creation info (binary semaphore)
+        VkSemaphoreCreateInfo semaphoreCreateInfo{};
+        semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        semaphoreCreateInfo.pNext = nullptr;                                    // default semaphore type is binary
+        semaphoreCreateInfo.flags = 0;
+
+        // fence creation info (signaled state)
+        VkFenceCreateInfo fenceCreateInfo{};
+        fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceCreateInfo.pNext = nullptr;
+        fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;           
+
+        // create sync primitives per frame
+        for (uint32_t i = 0; i < m_maxFramesInFlight; ++i)
+        {
+            auto& frameSync = m_frameSyncPrimitives[i];
+
+            // setup image available semaphore
+            if (!frameSync.mImageAvailableSemaphore.initialize(m_vkDevice, semaphoreCreateInfo))
+            {
+                VK_LOG_ERROR("Renderer::createSyncPrimitives failed to initialize image available semaphore : %u", i);
+                return false;
+            }
+
+            // setup render complete semaphore
+            if (!frameSync.mRenderCompleteSemaphore.initialize(m_vkDevice, semaphoreCreateInfo))
+            {
+                VK_LOG_ERROR("Renderer::createSyncPrimitives failed to initialize render complete semaphore : %u", i);
+                return false;
+            }
+
+            // setup in flight fence for command buffer execution
+            if (!frameSync.mInFlightFence.initialize(m_vkDevice, fenceCreateInfo))
+            {
+                VK_LOG_ERROR("Renderer::createSyncPrimitives failed to initialize fence : %u", i);
+                return false;
+            }
+        }
+
+        VK_LOG_DEBUG("Renderer::createSyncPrimitives successful");
+        return true;
+    }
+
+    bool Renderer::buildCommandBuffers()
+    {
+        // clear color used at the start of render pass
+        VkClearValue clearColor{};
+        clearColor.color.float32[0] = 0.0f;       // red
+        clearColor.color.float32[1] = 0.0f;       // green
+        clearColor.color.float32[2] = 1.0f;       // blue
+        clearColor.color.float32[3] = 1.0f;       // alpha
+
+        // render pass begin info (framebuffer updated per command buffer)
+        VkRenderPassBeginInfo renderPassBeginInfo{};
+        renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassBeginInfo.pNext = nullptr;
+        renderPassBeginInfo.renderPass = m_renderPass.get();
+        renderPassBeginInfo.renderArea.offset = {0, 0};
+        renderPassBeginInfo.renderArea.extent = m_vulkanSwapchain.getExtent();
+        renderPassBeginInfo.clearValueCount = 1;
+        renderPassBeginInfo.pClearValues = &clearColor;
+
+        // record commands per swapchain image
+        for (uint32_t i = 0; i < m_swapchainImageCount; ++i)
+        {
+            // reset and then begin recording into the command buffer
+            if (!m_commandBuffers[i].reset() || !m_commandBuffers[i].begin())
+            {
+                return false;
+            }
+
+            // setup render pass recording
+            renderPassBeginInfo.framebuffer = m_framebuffers[i].get();
+            m_commandBuffers[i].beginRenderPass(renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+            // drawing commands here ... 
+            m_commandBuffers[i].endRenderPass();
+
+            // finalize the command buffer
+            if (!m_commandBuffers[i].end())
+            {
+                return false;
+            }
+        }
+
+        VK_LOG_DEBUG("Renderer::buildCommandBuffers successful");
         return true;
     }
 }   // namespace keplar
