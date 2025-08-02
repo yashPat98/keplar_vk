@@ -34,11 +34,18 @@ namespace keplar
             // construction helpers
             VulkanInstance() noexcept;
             bool initialize(const VulkanContextConfig& config) noexcept;
+            bool setupDebugMessenger() noexcept;
             bool validateAndSetExtensions(const std::vector<std::string_view>& requestedExtensions) noexcept;
             bool validateAndSetValidationLayers(const std::vector<std::string_view>& requestedLayers) noexcept;
 
+            // vulkan debug callback invoked for validation and performance messages
+            static VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessageCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, 
+                                                                            VkDebugUtilsMessageTypeFlagsEXT messageType, 
+                                                                            const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, 
+                                                                            void* pUserData);
         private:
             VkInstance m_vkInstance;
+            VkDebugUtilsMessengerEXT m_vkDebugUtilsMessengerEXT;
             std::vector<const char*> m_enabledExtensions;
             std::vector<const char*> m_enabledValidationLayers;
     };
