@@ -18,13 +18,6 @@ namespace keplar
 
     VulkanCommandPool::~VulkanCommandPool()
     {
-        // free all command buffer allocated from pool
-        if (!m_ownedCommandBuffers.empty())
-        {
-            vkFreeCommandBuffers(m_vkDevice, m_vkCommandPool, static_cast<uint32_t>(m_ownedCommandBuffers.size()), m_ownedCommandBuffers.data());
-            VK_LOG_INFO("command buffers freed successfully : %zu", m_ownedCommandBuffers.size());
-        }
-
         // destroy command pool
         if (m_vkCommandPool != VK_NULL_HANDLE)
         {
@@ -59,17 +52,17 @@ namespace keplar
         return true;
     }
 
-    bool VulkanCommandPool::reset(VkCommandPoolResetFlags flags) noexcept
+    bool VulkanCommandPool::reset(VkCommandPoolResetFlags flags) const noexcept
     {
         return VK_CHECK(vkResetCommandPool(m_vkDevice, m_vkCommandPool, flags));
     }
 
-    void VulkanCommandPool::trim(VkCommandPoolTrimFlags flags) noexcept
+    void VulkanCommandPool::trim(VkCommandPoolTrimFlags flags) const noexcept
     {
         vkTrimCommandPool(m_vkDevice, m_vkCommandPool, flags);
     }
 
-    std::optional<VulkanCommandBuffer> VulkanCommandPool::allocate(VkCommandBufferLevel level) noexcept
+    std::optional<VulkanCommandBuffer> VulkanCommandPool::allocateBuffer(VkCommandBufferLevel level) const noexcept
     {
         // set up command buffer allocation info for a single command buffer
         VkCommandBufferAllocateInfo vkCommandBufferAllocateInfo{};
@@ -89,11 +82,10 @@ namespace keplar
         }
 
         VK_LOG_INFO("command buffer allocated from pool successfully");
-        m_ownedCommandBuffers.emplace_back(vkCommandBuffer);
         return VulkanCommandBuffer(vkCommandBuffer);
     }
 
-    std::vector<VulkanCommandBuffer> VulkanCommandPool::allocate(uint32_t count, VkCommandBufferLevel level) noexcept
+    std::vector<VulkanCommandBuffer> VulkanCommandPool::allocateBuffers(uint32_t count, VkCommandBufferLevel level) const noexcept
     {
         // set up command buffer allocation info 
         VkCommandBufferAllocateInfo vkCommandBufferAllocateInfo{};
@@ -115,18 +107,16 @@ namespace keplar
         // create command buffer lightweight wrappers and track for destruction
         std::vector<VulkanCommandBuffer> commandBuffers;
         commandBuffers.reserve(count);
-        m_ownedCommandBuffers.reserve(m_ownedCommandBuffers.size() + count);
         for (const auto& elm : vkCommandBuffers)
         {
             commandBuffers.emplace_back(VulkanCommandBuffer(elm));
-            m_ownedCommandBuffers.emplace_back(elm);
         }
 
         VK_LOG_INFO("command buffers allocated from pool successfully");
         return commandBuffers;
     }
 
-    void VulkanCommandPool::freeCommandBuffers(const std::vector<VulkanCommandBuffer>& commandBuffers) noexcept
+    void VulkanCommandPool::freeBuffers(const std::vector<VulkanCommandBuffer>& commandBuffers) const noexcept
     {
         // validate input
         if (commandBuffers.empty())
@@ -143,18 +133,15 @@ namespace keplar
             vkCommandBuffers.emplace_back(buffer.get());
         }
 
-        // free command buffers from the Vulkan command pool
+        // free command buffers from the vulkan command pool
         vkFreeCommandBuffers(m_vkDevice, m_vkCommandPool, static_cast<uint32_t>(vkCommandBuffers.size()), vkCommandBuffers.data());
         VK_LOG_INFO("command buffers freed successfully : %zu", vkCommandBuffers.size()); 
+    }
 
-        // remove freed buffers 
-        for (auto elm : vkCommandBuffers)
-        {
-            auto it = std::find(m_ownedCommandBuffers.begin(), m_ownedCommandBuffers.end(), elm);
-            if (it != m_ownedCommandBuffers.end())
-            {
-                m_ownedCommandBuffers.erase(it);
-            }
-        }
+    void VulkanCommandPool::freeBuffer(const VulkanCommandBuffer& commandBuffer) const noexcept
+    {
+        auto vkCommandBuffer = commandBuffer.get();
+        vkFreeCommandBuffers(m_vkDevice, m_vkCommandPool, 1, &vkCommandBuffer);
+        VK_LOG_INFO("command buffers freed successfully"); 
     }
 }   // namespace keplar

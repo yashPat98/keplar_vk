@@ -9,7 +9,8 @@
 namespace keplar
 {
     Renderer::Renderer(const VulkanContext& context) noexcept
-        : m_vulkanDevice(context.getDevice())
+        : m_threadPool(8)
+        , m_vulkanDevice(context.getDevice())
         , m_vulkanSwapchain(context.getSwapchain())
         , m_vkDevice(m_vulkanDevice.getDevice())
         , m_vkSwapchainKHR(m_vulkanSwapchain.get())
@@ -22,6 +23,7 @@ namespace keplar
         , m_framebuffers(m_swapchainImageCount)
         , m_frameSyncPrimitives(m_maxFramesInFlight)
         , m_readyToRender(false)
+        , m_triangleBuffer(m_vulkanDevice)
     {
         // vulkan spec suggests max frames in flight should be less than swapchain image count
         // to prevent CPU stalling while waiting for an image to become available for rendering.
@@ -31,9 +33,18 @@ namespace keplar
 
     Renderer::~Renderer()
     {
-        // ensure no rendering is in progress and wait for GPU to finish all submitted work
+        // stop any new rendering tasks from being submitted
         m_readyToRender.store(false); 
-        vkDeviceWaitIdle(m_vkDevice); 
+
+        // wait until all tasks in the thread pool are finished
+        m_threadPool.waitIdle();
+
+        // ensure GPU has completed all work submitted to the device
+        vkDeviceWaitIdle(m_vkDevice);
+
+        // destroy vulkan resources 
+        m_commandPool.freeBuffers(m_commandBuffers);
+        m_commandBuffers.clear();
     }
 
     bool Renderer::initialize() noexcept
@@ -43,6 +54,7 @@ namespace keplar
         if (!createFramebuffers()) { return false; }
         if (!createSyncPrimitives()) { return false; }
         if (!buildCommandBuffers()) { return false; }
+        if (!createVertexBuffer()) { return false; }
         
         m_readyToRender.store(true);
         VK_LOG_DEBUG("Renderer::initialize successful");
@@ -140,7 +152,7 @@ namespace keplar
         }
 
         // allocate primary command buffers per swapchain
-        m_commandBuffers = m_commandPool.allocate(m_swapchainImageCount, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        m_commandBuffers = m_commandPool.allocateBuffers(m_swapchainImageCount, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
         if (m_commandBuffers.empty())
         {
             VK_LOG_ERROR("Renderer::createCommandBuffers failed to allocate command buffers.");
@@ -323,6 +335,37 @@ namespace keplar
         }
 
         VK_LOG_DEBUG("Renderer::buildCommandBuffers successful");
+        return true;
+    }
+
+    bool Renderer::createVertexBuffer()
+    {
+         // define triangle vertices
+        float triangle_position[] = 
+        {
+            // (x, y, z)
+            0.0f,  1.0f,  0.0f,
+           -1.0f, -1.0f,  0.0f,
+            1.0f, -1.0f,  0.0f
+        };
+
+        // vulkan buffer creation info
+        VkBufferCreateInfo bufferCreateInfo{};
+        bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;                                    
+        bufferCreateInfo.pNext = nullptr;                                                                    
+        bufferCreateInfo.flags = 0;                                                                       
+        bufferCreateInfo.size = sizeof(triangle_position);                                                
+        bufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;  
+        bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;                                        
+
+        // create device local buffer via staging buffer for upload
+        if (!m_triangleBuffer.createDeviceLocal(m_commandPool, bufferCreateInfo, triangle_position, sizeof(triangle_position), m_threadPool))
+        {
+            VK_LOG_ERROR("Renderer::createVertexBuffer failed to create device-local vertex buffer");
+            return false;
+        }
+        
+        VK_LOG_DEBUG("Renderer::CreateVertexBuffer successful");
         return true;
     }
 }   // namespace keplar

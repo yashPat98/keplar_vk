@@ -7,6 +7,7 @@
 #include <vector>
 #include <atomic>
 
+#include "utils/thread_pool.hpp"
 #include "vulkan/vulkan_context.hpp"
 #include "vulkan/vulkan_command_pool.hpp"
 #include "vulkan/vulkan_command_buffer.hpp"
@@ -14,6 +15,7 @@
 #include "vulkan/vulkan_framebuffer.hpp"
 #include "vulkan/vulkan_fence.hpp"
 #include "vulkan/vulkan_semaphore.hpp"
+#include "vulkan/buffer/vertex_buffer.hpp"
 
 namespace keplar
 {
@@ -39,6 +41,7 @@ namespace keplar
             bool createFramebuffers();
             bool createSyncPrimitives();
             bool buildCommandBuffers();
+            bool createVertexBuffer();
 
         private:
             // per frame sync primitives
@@ -48,6 +51,9 @@ namespace keplar
                 VulkanSemaphore  mRenderCompleteSemaphore;
                 VulkanFence      mInFlightFence;
             };
+
+            // dedicated thread pool for renderer tasks
+            ThreadPool                          m_threadPool;
 
             // immutable core vulkan components provided by context
             const VulkanDevice&                 m_vulkanDevice;
@@ -70,5 +76,7 @@ namespace keplar
             std::vector<VulkanFramebuffer>      m_framebuffers;
             std::vector<FrameSyncPrimitives>    m_frameSyncPrimitives;
             std::atomic<bool>                   m_readyToRender;
+
+            VertexBuffer                        m_triangleBuffer;
     };
 }   // namespace keplar

@@ -19,6 +19,7 @@ namespace keplar
     KeplarApp::KeplarApp() noexcept
         : m_platform(nullptr)
         , m_vulkanContext(nullptr)
+        , m_renderer(nullptr)
     {
     }
 

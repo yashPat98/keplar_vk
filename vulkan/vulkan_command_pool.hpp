@@ -27,13 +27,14 @@ namespace keplar
             
             // pool operations
             bool initialize(VkDevice vkDevice, const VkCommandPoolCreateInfo& createInfo) noexcept;
-            bool reset(VkCommandPoolResetFlags flags = 0) noexcept;
-            void trim(VkCommandPoolTrimFlags flags = 0) noexcept;
+            bool reset(VkCommandPoolResetFlags flags = 0) const noexcept;
+            void trim(VkCommandPoolTrimFlags flags = 0) const noexcept;
 
             // command buffer allocation
-            std::optional<VulkanCommandBuffer> allocate(VkCommandBufferLevel level) noexcept;
-            std::vector<VulkanCommandBuffer> allocate(uint32_t count, VkCommandBufferLevel level) noexcept;
-            void freeCommandBuffers(const std::vector<VulkanCommandBuffer>& commandBuffers) noexcept;
+            std::optional<VulkanCommandBuffer> allocateBuffer(VkCommandBufferLevel level) const noexcept;
+            std::vector<VulkanCommandBuffer> allocateBuffers(uint32_t count, VkCommandBufferLevel level) const noexcept;
+            void freeBuffers(const std::vector<VulkanCommandBuffer>& commandBuffers) const noexcept;
+            void freeBuffer(const VulkanCommandBuffer& commandBuffer) const noexcept;
 
             // accessors
             VkCommandPool get() const noexcept { return m_vkCommandPool; }
@@ -43,7 +44,6 @@ namespace keplar
             VkDevice m_vkDevice;
             VkCommandPool m_vkCommandPool;
             std::optional<uint32_t> m_queueFamilyIndex;
-            std::vector<VkCommandBuffer> m_ownedCommandBuffers;
     };
 }   // namespace keplar
  
