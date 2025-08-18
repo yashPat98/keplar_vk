@@ -13,6 +13,21 @@ namespace keplar
     {
     }
 
+    VulkanCommandBuffer::VulkanCommandBuffer(const VulkanCommandBuffer& other) noexcept
+        : m_vkCommandBuffer(other.m_vkCommandBuffer)
+    {
+
+    }
+
+    VulkanCommandBuffer& VulkanCommandBuffer::operator=(const VulkanCommandBuffer& other) noexcept
+    {
+        if (this != &other)
+        {
+            m_vkCommandBuffer = other.m_vkCommandBuffer;
+        }
+        return *this;
+    }
+
     VulkanCommandBuffer::VulkanCommandBuffer(VulkanCommandBuffer&& other) noexcept
         : m_vkCommandBuffer(other.m_vkCommandBuffer)
     {
@@ -58,4 +73,10 @@ namespace keplar
     {
         vkCmdEndRenderPass(m_vkCommandBuffer);
     }
+
+    void VulkanCommandBuffer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t regionCount, const VkBufferCopy* copyRegions) noexcept
+    {
+        vkCmdCopyBuffer(m_vkCommandBuffer, srcBuffer, dstBuffer, regionCount, copyRegions);
+    }
+
 }   // namespace keplar

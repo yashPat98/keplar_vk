@@ -18,9 +18,9 @@ namespace keplar
             VulkanCommandBuffer() = delete;
             ~VulkanCommandBuffer() = default;
 
-            // disable copy semantics
-            VulkanCommandBuffer(const VulkanCommandBuffer&) = delete;
-            VulkanCommandBuffer& operator=(const VulkanCommandBuffer&) = delete;
+            // copy semantics
+            VulkanCommandBuffer(const VulkanCommandBuffer&) noexcept;
+            VulkanCommandBuffer& operator=(const VulkanCommandBuffer&) noexcept;
 
             // move semantics
             VulkanCommandBuffer(VulkanCommandBuffer&&) noexcept;
@@ -34,6 +34,9 @@ namespace keplar
             // render pass helpers
             void beginRenderPass(const VkRenderPassBeginInfo& beginInfo, VkSubpassContents contents) noexcept;
             void endRenderPass() noexcept;
+  
+            // copy buffer
+            void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t regionCount, const VkBufferCopy* copyRegions) noexcept;
 
             // accessor
             VkCommandBuffer get() const noexcept { return m_vkCommandBuffer; }

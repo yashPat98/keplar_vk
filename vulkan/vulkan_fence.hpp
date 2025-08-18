@@ -29,6 +29,7 @@ namespace keplar
 
             // accessor
             VkFence get() const noexcept { return m_vkFence; }
+            bool isValid() const noexcept { return m_vkFence != VK_NULL_HANDLE; }
 
         private:
             VkFence m_vkFence;

@@ -151,6 +151,22 @@ namespace keplar
         return std::find(m_deviceConfig.mDeviceExtensions.begin(), m_deviceConfig.mDeviceExtensions.end(), extensionName) != m_deviceConfig.mDeviceExtensions.end();
     }
 
+    std::optional<uint32_t> VulkanDevice::findMemoryType(uint32_t memoryTypeBits, VkMemoryPropertyFlags propertyFlags) const noexcept
+    {
+        for (uint32_t i = 0; i < m_vkPhysicalDeviceMemoryProperties.memoryTypeCount; i++)
+        {
+            bool isCompatibleType = (memoryTypeBits & (1 << i)) != 0;
+            bool hasRequiredProperties = (m_vkPhysicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & propertyFlags) == propertyFlags;
+            if (isCompatibleType && hasRequiredProperties)
+            {   
+                return i;
+            }
+        }
+
+        VK_LOG_ERROR("No suitable memory type found for properties: %s", string_VkMemoryPropertyFlags(propertyFlags).c_str());
+        return std::nullopt;
+    }
+
     bool VulkanDevice::selectPhysicalDevice(const VulkanSurface& surface) noexcept
     {
         // query the number of vulkan compatible physical devices.

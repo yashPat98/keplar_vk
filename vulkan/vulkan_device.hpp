@@ -72,6 +72,9 @@ namespace keplar
             const VkPhysicalDeviceMemoryProperties& getPhysicalDeviceMemoryProperties() const noexcept;
             bool isExtensionEnabled(const char* extensionName) const noexcept;
 
+            // query properties
+            std::optional<uint32_t> findMemoryType(uint32_t memoryTypeBits, VkMemoryPropertyFlags propertyFlags) const noexcept;
+
         private:
             struct PhysicalDeviceInfo;
 

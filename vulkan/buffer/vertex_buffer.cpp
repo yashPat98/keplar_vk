@@ -1,0 +1,281 @@
+// ────────────────────────────────────────────
+//  File: vertex_buffer.cpp · Created by Yash Patel · 8-2-2025
+// ────────────────────────────────────────────
+
+#include "vertex_buffer.hpp"
+#include "utils/logger.hpp"
+#include "vulkan/vulkan_command_buffer.hpp"
+
+namespace keplar
+{
+    VertexBuffer::VertexBuffer(const VulkanDevice& vulkanDevice) noexcept
+        : m_vulkanDevice(vulkanDevice)
+        , m_vkDevice(m_vulkanDevice.getDevice())
+        , m_vkBuffer(VK_NULL_HANDLE)
+        , m_vkDeviceMemory(VK_NULL_HANDLE)
+    {
+    }
+
+    VertexBuffer::~VertexBuffer()
+    {
+        if (m_vkDeviceMemory != VK_NULL_HANDLE)
+        {
+            vkFreeMemory(m_vkDevice, m_vkDeviceMemory, nullptr);
+            m_vkDeviceMemory = VK_NULL_HANDLE;
+            VK_LOG_INFO("vulkan buffer memory freed successfully");
+        }
+
+        if (m_vkBuffer != VK_NULL_HANDLE)
+        {
+            vkDestroyBuffer(m_vkDevice, m_vkBuffer, nullptr);
+            m_vkBuffer = VK_NULL_HANDLE;
+            m_vkDevice = VK_NULL_HANDLE;
+            VK_LOG_INFO("vulkan buffer destroyed successfully");
+        }
+    }
+
+    bool VertexBuffer::createHostVisible(const VkBufferCreateInfo& createInfo, const void* data, size_t size) noexcept
+    {
+        // validate device handle
+        if (m_vkDevice == VK_NULL_HANDLE || size == 0 || data == nullptr)
+        {
+            VK_LOG_WARN("VertexBuffer::createDeviceLocal invalid input or device handle");
+            return false;
+        }
+
+        // create vertex buffer and allocate memory
+        VkDeviceSize allocationSize;
+        if (!createBuffer(createInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+                          m_vkBuffer, m_vkDeviceMemory, allocationSize))
+        {
+            return false;
+        }
+        
+        // map memory 
+        void* mappedData = nullptr;
+        VkResult vkResult = vkMapMemory(m_vkDevice, m_vkDeviceMemory, 0, allocationSize, 0, &mappedData);
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_FATAL("vkMapMemory failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            return false;
+        }
+
+        // copy data to mapped memory
+        std::memcpy(mappedData, data, size);
+
+        // unmap memory
+        vkUnmapMemory(m_vkDevice, m_vkDeviceMemory);
+        VK_LOG_DEBUG("VertexBuffer::createHostVisible successful");
+        return true;
+    }
+
+    bool VertexBuffer::createDeviceLocal(const VulkanCommandPool& commandPool, 
+                                         const VkBufferCreateInfo& createInfo, 
+                                         const void* data, 
+                                         size_t size, 
+                                         std::optional<std::reference_wrapper<ThreadPool>> threadPool) noexcept
+    {
+        // validate vulkan handles
+        if (m_vkDevice == VK_NULL_HANDLE || size == 0 || data == nullptr)
+        {
+            VK_LOG_WARN("VertexBuffer::createDeviceLocal invalid input or device handle");
+            return false;
+        }
+
+        // staging buffer creation info
+        VkBufferCreateInfo createInfoStaging{};
+        createInfoStaging.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        createInfoStaging.pNext = nullptr;
+        createInfoStaging.flags = 0;
+        createInfoStaging.size = size;
+        createInfoStaging.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        createInfoStaging.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    
+        // staging buffer resources used for temporary host-to-device copy
+        VkBuffer vkBufferStaging = VK_NULL_HANDLE;
+        VkDeviceMemory vkDeviceMemoryStaging = VK_NULL_HANDLE;
+        VkDeviceSize allocationSize;
+
+        // create staging vertex buffer and allocate memory 
+        if (!createBuffer(createInfoStaging, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+                          vkBufferStaging, vkDeviceMemoryStaging, allocationSize))
+        {
+            return false;
+        }
+
+        // map memory 
+        void* mappedData = nullptr;
+        VkResult vkResult = vkMapMemory(m_vkDevice, vkDeviceMemoryStaging, 0, allocationSize, 0, &mappedData);
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_FATAL("vkMapMemory failed for staging buffer : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
+            vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
+            return false;
+        }
+
+        // copy data to mapped memory
+        std::memcpy(mappedData, data, size);
+
+        // unmap memory
+        vkUnmapMemory(m_vkDevice, vkDeviceMemoryStaging);
+
+        // create device local buffer and allocate memory 
+        if (!createBuffer(createInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_vkBuffer, m_vkDeviceMemory, allocationSize))
+        {
+            vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
+            vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
+            return false;
+        }
+
+        // allocate one-time submit command buffer from pool for host to device copy
+        auto commandBufferOpt = commandPool.allocateBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        if (!commandBufferOpt)
+        {
+            vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
+            vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
+            return false;
+        }
+
+        // safely unwrap the optional
+        auto& commandBuffer = *commandBufferOpt;
+
+        // begin recording commands
+        if (!commandBuffer.begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT))
+        {
+            vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
+            vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
+            return false;
+        }
+
+        // copy from staging host buffer to device-local buffer
+        VkBufferCopy vkBufferCopy{};
+        vkBufferCopy.srcOffset = 0;
+        vkBufferCopy.dstOffset = 0;
+        vkBufferCopy.size = size;
+        commandBuffer.copyBuffer(vkBufferStaging, m_vkBuffer, 1, &vkBufferCopy);
+
+        // end recording commands
+        if (!commandBuffer.end())
+        {
+            vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
+            vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
+            return false;
+        }
+
+        // create a fence to track copy completion
+        VkFenceCreateInfo fenceCreateInfo{};
+        fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceCreateInfo.pNext = nullptr;
+        fenceCreateInfo.flags = 0;  
+        m_copyFence.initialize(m_vkDevice, fenceCreateInfo);
+ 
+        // submit info for executing the command buffer
+        VkCommandBuffer vkCommandBuffer = commandBuffer.get();
+        VkSubmitInfo vkSubmitInfo{};
+        vkSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        vkSubmitInfo.pNext = nullptr;
+        vkSubmitInfo.commandBufferCount = 1;
+        vkSubmitInfo.pCommandBuffers = &vkCommandBuffer;
+
+        // submit the copy command and signal the fence on completion
+        vkResult = vkQueueSubmit(m_vulkanDevice.getGraphicsQueue(), 1, &vkSubmitInfo, m_copyFence.get());
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_FATAL("vkQueueSubmit failed for buffer copy from host to device : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
+            vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
+            return false;
+        }
+
+        if (threadPool)
+        { 
+            // cleanup resources asynchronously on a worker thread
+            threadPool->get().dispatch([this, 
+                                        vkBufferStaging, 
+                                        vkDeviceMemoryStaging, 
+                                        vkCommandPool = commandPool.get(), 
+                                        vkCommandBuffer = commandBuffer.get()]()
+            {
+                m_copyFence.wait();  
+                vkFreeCommandBuffers(m_vkDevice, vkCommandPool, 1, &vkCommandBuffer);
+                vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
+                vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
+                VK_LOG_DEBUG("VertexBuffer::createDeviceLocal staging resources freed successfully");
+            });
+        }
+        else 
+        {
+            // cleanup resources synchronously on current thread
+            m_copyFence.wait();
+            commandPool.freeBuffer(commandBuffer);
+            vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
+            vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
+        }
+
+        VK_LOG_DEBUG("VertexBuffer::createDeviceLocal successful");
+        return true;
+    }
+
+    void VertexBuffer::waitForUpload() noexcept
+    {
+        // wait until the GPU completes the buffer copy command
+        if (m_copyFence.isValid())
+        {
+            m_copyFence.wait();
+        }
+    }
+
+    bool VertexBuffer::createBuffer(const VkBufferCreateInfo& createInfo, VkMemoryPropertyFlags propertyFlags, 
+                                    VkBuffer& vkBuffer, 
+                                    VkDeviceMemory& vkDeviceMemory,
+                                    VkDeviceSize& allocationSize)
+    {
+        // create vulkan buffer
+        VkResult vkResult = vkCreateBuffer(m_vkDevice, &createInfo, nullptr, &vkBuffer);
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_FATAL("vkCreateBuffer failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            return false;
+        }
+
+        // query memory requirements
+        VkMemoryRequirements vkMemoryRequirements{};
+        vkGetBufferMemoryRequirements(m_vkDevice, vkBuffer, &vkMemoryRequirements);
+
+        // find suitable memory type
+        auto memoryTypeIndex = m_vulkanDevice.findMemoryType(vkMemoryRequirements.memoryTypeBits, propertyFlags);
+        if (!memoryTypeIndex)
+        {
+            return false;
+        }
+
+        // allocate device memory from vulkan heap
+        VkMemoryAllocateInfo vkMemoryAllocateInfo{};
+        vkMemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        vkMemoryAllocateInfo.pNext = nullptr;
+        vkMemoryAllocateInfo.allocationSize = vkMemoryRequirements.size;
+        vkMemoryAllocateInfo.memoryTypeIndex = *memoryTypeIndex;
+
+        vkResult = vkAllocateMemory(m_vkDevice, &vkMemoryAllocateInfo, nullptr, &vkDeviceMemory);
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_FATAL("vkAllocateMemory failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            return false;
+        }
+
+        // bind memory to buffer
+        vkResult = vkBindBufferMemory(m_vkDevice, vkBuffer, vkDeviceMemory, 0);
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_FATAL("vkBindBufferMemory failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            return false;
+        }
+
+        // return allocation size for mapping
+        allocationSize = vkMemoryAllocateInfo.allocationSize;
+        VK_LOG_DEBUG("VertexBuffer::createBuffer successful");
+        return true;
+    }
+
+}   // namespace keplar

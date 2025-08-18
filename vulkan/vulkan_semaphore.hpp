@@ -26,6 +26,7 @@ namespace keplar
 
             // accessor
             VkSemaphore get() const noexcept { return m_vkSemaphore; }
+            bool isValid() const noexcept { return m_vkSemaphore != VK_NULL_HANDLE; }
 
         private:
             VkSemaphore m_vkSemaphore;
