@@ -23,7 +23,7 @@ namespace keplar
         , m_framebuffers(m_swapchainImageCount)
         , m_frameSyncPrimitives(m_maxFramesInFlight)
         , m_readyToRender(false)
-        , m_triangleBuffer(m_vulkanDevice)
+        , m_vertexBuffer(m_vulkanDevice)
     {
         // vulkan spec suggests max frames in flight should be less than swapchain image count
         // to prevent CPU stalling while waiting for an image to become available for rendering.
@@ -359,7 +359,7 @@ namespace keplar
         bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;                                        
 
         // create device local buffer via staging buffer for upload
-        if (!m_triangleBuffer.createDeviceLocal(m_commandPool, bufferCreateInfo, triangle_position, sizeof(triangle_position), m_threadPool))
+        if (!m_vertexBuffer.createDeviceLocal(m_commandPool, bufferCreateInfo, triangle_position, sizeof(triangle_position), m_threadPool))
         {
             VK_LOG_ERROR("Renderer::createVertexBuffer failed to create device-local vertex buffer");
             return false;

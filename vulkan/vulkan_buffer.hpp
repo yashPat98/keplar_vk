@@ -1,5 +1,5 @@
 // ────────────────────────────────────────────
-//  File: vertex_buffer.hpp · Created by Yash Patel · 8-2-2025
+//  File: vulkan_buffer.hpp · Created by Yash Patel · 8-2-2025
 // ────────────────────────────────────────────
 
 #include "vulkan/vk_config.hpp"
@@ -10,18 +10,18 @@
 
 namespace keplar
 {
-    class VertexBuffer final
+    class VulkanBuffer final
     {
         public:
             // creation and destruction
-            VertexBuffer(const VulkanDevice& vulkanDevice) noexcept;
-            ~VertexBuffer();  
+            VulkanBuffer(const VulkanDevice& vulkanDevice) noexcept;
+            ~VulkanBuffer();  
 
             // disable copy and move semantics to enforce unique ownership
-            VertexBuffer(const VertexBuffer&) = delete;
-            VertexBuffer& operator=(const VertexBuffer&) = delete;
-            VertexBuffer(VertexBuffer&&) = delete;
-            VertexBuffer& operator=(VertexBuffer&&) = delete;
+            VulkanBuffer(const VulkanBuffer&) = delete;
+            VulkanBuffer& operator=(const VulkanBuffer&) = delete;
+            VulkanBuffer(VulkanBuffer&&) = delete;
+            VulkanBuffer& operator=(VulkanBuffer&&) = delete;
  
             // usage
             bool createHostVisible(const VkBufferCreateInfo& createInfo, const void* data, size_t size) noexcept;

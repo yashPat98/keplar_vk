@@ -1,14 +1,14 @@
 // ────────────────────────────────────────────
-//  File: vertex_buffer.cpp · Created by Yash Patel · 8-2-2025
+//  File: vulkan_buffer.cpp · Created by Yash Patel · 8-2-2025
 // ────────────────────────────────────────────
 
-#include "vertex_buffer.hpp"
+#include "vulkan_buffer.hpp"
 #include "utils/logger.hpp"
 #include "vulkan/vulkan_command_buffer.hpp"
 
 namespace keplar
 {
-    VertexBuffer::VertexBuffer(const VulkanDevice& vulkanDevice) noexcept
+    VulkanBuffer::VulkanBuffer(const VulkanDevice& vulkanDevice) noexcept
         : m_vulkanDevice(vulkanDevice)
         , m_vkDevice(m_vulkanDevice.getDevice())
         , m_vkBuffer(VK_NULL_HANDLE)
@@ -16,7 +16,7 @@ namespace keplar
     {
     }
 
-    VertexBuffer::~VertexBuffer()
+    VulkanBuffer::~VulkanBuffer()
     {
         if (m_vkDeviceMemory != VK_NULL_HANDLE)
         {
@@ -34,12 +34,12 @@ namespace keplar
         }
     }
 
-    bool VertexBuffer::createHostVisible(const VkBufferCreateInfo& createInfo, const void* data, size_t size) noexcept
+    bool VulkanBuffer::createHostVisible(const VkBufferCreateInfo& createInfo, const void* data, size_t size) noexcept
     {
         // validate device handle
         if (m_vkDevice == VK_NULL_HANDLE || size == 0 || data == nullptr)
         {
-            VK_LOG_WARN("VertexBuffer::createDeviceLocal invalid input or device handle");
+            VK_LOG_WARN("VulkanBuffer::createDeviceLocal invalid input or device handle");
             return false;
         }
 
@@ -65,11 +65,11 @@ namespace keplar
 
         // unmap memory
         vkUnmapMemory(m_vkDevice, m_vkDeviceMemory);
-        VK_LOG_DEBUG("VertexBuffer::createHostVisible successful");
+        VK_LOG_DEBUG("VulkanBuffer::createHostVisible successful");
         return true;
     }
 
-    bool VertexBuffer::createDeviceLocal(const VulkanCommandPool& commandPool, 
+    bool VulkanBuffer::createDeviceLocal(const VulkanCommandPool& commandPool, 
                                          const VkBufferCreateInfo& createInfo, 
                                          const void* data, 
                                          size_t size, 
@@ -78,7 +78,7 @@ namespace keplar
         // validate vulkan handles
         if (m_vkDevice == VK_NULL_HANDLE || size == 0 || data == nullptr)
         {
-            VK_LOG_WARN("VertexBuffer::createDeviceLocal invalid input or device handle");
+            VK_LOG_WARN("VulkanBuffer::createDeviceLocal invalid input or device handle");
             return false;
         }
 
@@ -201,7 +201,7 @@ namespace keplar
                 vkFreeCommandBuffers(m_vkDevice, vkCommandPool, 1, &vkCommandBuffer);
                 vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
                 vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
-                VK_LOG_DEBUG("VertexBuffer::createDeviceLocal staging resources freed successfully");
+                VK_LOG_DEBUG("VulkanBuffer::createDeviceLocal staging resources freed successfully");
             });
         }
         else 
@@ -213,11 +213,11 @@ namespace keplar
             vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
         }
 
-        VK_LOG_DEBUG("VertexBuffer::createDeviceLocal successful");
+        VK_LOG_DEBUG("VulkanBuffer::createDeviceLocal successful");
         return true;
     }
 
-    void VertexBuffer::waitForUpload() noexcept
+    void VulkanBuffer::waitForUpload() noexcept
     {
         // wait until the GPU completes the buffer copy command
         if (m_copyFence.isValid())
@@ -226,7 +226,7 @@ namespace keplar
         }
     }
 
-    bool VertexBuffer::createBuffer(const VkBufferCreateInfo& createInfo, VkMemoryPropertyFlags propertyFlags, 
+    bool VulkanBuffer::createBuffer(const VkBufferCreateInfo& createInfo, VkMemoryPropertyFlags propertyFlags, 
                                     VkBuffer& vkBuffer, 
                                     VkDeviceMemory& vkDeviceMemory,
                                     VkDeviceSize& allocationSize)
@@ -274,7 +274,7 @@ namespace keplar
 
         // return allocation size for mapping
         allocationSize = vkMemoryAllocateInfo.allocationSize;
-        VK_LOG_DEBUG("VertexBuffer::createBuffer successful");
+        VK_LOG_DEBUG("VulkanBuffer::createBuffer successful");
         return true;
     }
 

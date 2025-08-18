@@ -15,7 +15,7 @@
 #include "vulkan/vulkan_framebuffer.hpp"
 #include "vulkan/vulkan_fence.hpp"
 #include "vulkan/vulkan_semaphore.hpp"
-#include "vulkan/buffer/vertex_buffer.hpp"
+#include "vulkan/vulkan_buffer.hpp"
 
 namespace keplar
 {
@@ -76,7 +76,7 @@ namespace keplar
             std::vector<VulkanFramebuffer>      m_framebuffers;
             std::vector<FrameSyncPrimitives>    m_frameSyncPrimitives;
             std::atomic<bool>                   m_readyToRender;
-
-            VertexBuffer                        m_triangleBuffer;
+            
+            VulkanBuffer                        m_vertexBuffer;
     };
 }   // namespace keplar
