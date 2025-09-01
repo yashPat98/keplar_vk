@@ -11,8 +11,9 @@
 namespace keplar
 {
     VulkanShader::VulkanShader() noexcept
-        : m_vkShaderModule(VK_NULL_HANDLE)
-        , m_vkDevice(VK_NULL_HANDLE)
+        : m_vkDevice(VK_NULL_HANDLE)
+        , m_vkShaderModule(VK_NULL_HANDLE)
+        , m_vkPipelineShaderStageCreateInfo{}
     {
     }
 
@@ -28,7 +29,42 @@ namespace keplar
         }
     }
 
-    bool VulkanShader::initialize(VkDevice vkDevice, const std::string& spirvFile) noexcept
+    VulkanShader::VulkanShader(VulkanShader&& other) noexcept
+        : m_vkDevice(other.m_vkDevice)
+        , m_vkShaderModule(other.m_vkShaderModule)
+        , m_vkPipelineShaderStageCreateInfo(other.m_vkPipelineShaderStageCreateInfo)
+    {
+        // reset the other
+        other.m_vkDevice = VK_NULL_HANDLE;
+        other.m_vkShaderModule = VK_NULL_HANDLE;
+        other.m_vkPipelineShaderStageCreateInfo = {};
+    }
+
+    VulkanShader& VulkanShader::operator=(VulkanShader&& other) noexcept
+    {
+        if (this != &other)
+        {
+            // release current resources
+            if (m_vkShaderModule != VK_NULL_HANDLE)
+            {
+                vkDestroyShaderModule(m_vkDevice, m_vkShaderModule, nullptr);
+            }
+
+            // transfer ownership
+            m_vkDevice = other.m_vkDevice;
+            m_vkShaderModule = other.m_vkShaderModule;
+            m_vkPipelineShaderStageCreateInfo = other.m_vkPipelineShaderStageCreateInfo;
+
+            // reset the other
+            other.m_vkDevice = VK_NULL_HANDLE;
+            other.m_vkShaderModule = VK_NULL_HANDLE;
+            other.m_vkPipelineShaderStageCreateInfo = {};
+        }
+
+        return *this;
+    }
+
+    bool VulkanShader::initialize(VkDevice vkDevice, VkShaderStageFlagBits stage, const std::string& spirvFile) noexcept
     {
         // validate device handle
         if (vkDevice == VK_NULL_HANDLE)
@@ -63,6 +99,15 @@ namespace keplar
             VK_LOG_FATAL("vkCreateShaderModule failed to create shader module : %s (code: %d)", string_VkResult(vkResult), vkResult);
             return false;
         }
+
+        // setup shader stage info for pipeline
+        m_vkPipelineShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        m_vkPipelineShaderStageCreateInfo.pNext = nullptr;
+        m_vkPipelineShaderStageCreateInfo.flags = 0;
+        m_vkPipelineShaderStageCreateInfo.stage = stage;
+        m_vkPipelineShaderStageCreateInfo.module = m_vkShaderModule;
+        m_vkPipelineShaderStageCreateInfo.pName = "main";
+        m_vkPipelineShaderStageCreateInfo.pSpecializationInfo = nullptr;
 
         // store device handle for destruction
         m_vkDevice = vkDevice;

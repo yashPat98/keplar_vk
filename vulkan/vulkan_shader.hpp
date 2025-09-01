@@ -15,17 +15,20 @@ namespace keplar
             VulkanShader() noexcept;
             ~VulkanShader();
 
-            // disable copy and move semantics to enforce unique ownership
+            // disable copy semantics to enforce unique ownership
             VulkanShader(const VulkanShader&) = delete;
             VulkanShader& operator=(const VulkanShader&) = delete;
-            VulkanShader(VulkanShader&&) = delete;
-            VulkanShader& operator=(VulkanShader&&) = delete;
+
+            // move semantics
+            VulkanShader(VulkanShader&&) noexcept;
+            VulkanShader& operator=(VulkanShader&&) noexcept;
 
             // usage
-            bool initialize(VkDevice vkDevice, const std::string& spirvFile) noexcept;
+            bool initialize(VkDevice vkDevice, VkShaderStageFlagBits stage, const std::string& spirvFile) noexcept;
 
             // accessor
             VkShaderModule get() const noexcept { return m_vkShaderModule; }
+            const VkPipelineShaderStageCreateInfo& getShaderStageInfo() const noexcept { return m_vkPipelineShaderStageCreateInfo; }
             bool isValid() const noexcept { return m_vkShaderModule != VK_NULL_HANDLE; }
 
         private:
@@ -33,8 +36,9 @@ namespace keplar
         
         private:
             // vulkan handles
-            VkShaderModule m_vkShaderModule;
             VkDevice m_vkDevice;
+            VkShaderModule m_vkShaderModule;
+            VkPipelineShaderStageCreateInfo m_vkPipelineShaderStageCreateInfo;
     };
 }   // namespace keplar
 
