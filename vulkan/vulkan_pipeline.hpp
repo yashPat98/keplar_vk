@@ -42,11 +42,13 @@ namespace keplar
             VulkanPipeline() noexcept;
             ~VulkanPipeline();
 
-            // disable copy and move semantics to enforce unique ownership
+            // disable copy semantics to enforce unique ownership
             VulkanPipeline(const VulkanPipeline&) = delete;
             VulkanPipeline& operator=(const VulkanPipeline&) = delete;
-            VulkanPipeline(VulkanPipeline&&) = delete;
-            VulkanPipeline& operator=(VulkanPipeline&&) = delete;
+
+            // move semantics
+            VulkanPipeline(VulkanPipeline&&) noexcept;
+            VulkanPipeline& operator=(VulkanPipeline&&) noexcept;
 
             bool initialize(VkDevice vkDevice, const GraphicsPipelineConfig& pipelineConfig) noexcept;
             

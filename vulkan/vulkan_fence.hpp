@@ -15,11 +15,13 @@ namespace keplar
             VulkanFence() noexcept;
             ~VulkanFence();
 
-            // disable copy and move semantics to enforce unique ownership
+            // disable copy semantics to enforce unique ownership
             VulkanFence(const VulkanFence&) = delete;
             VulkanFence& operator=(const VulkanFence&) = delete;
-            VulkanFence(VulkanFence&&) = delete;
-            VulkanFence& operator=(VulkanFence&&) = delete;
+
+            // move semantics
+            VulkanFence(VulkanFence&&) noexcept;
+            VulkanFence& operator=(VulkanFence&&) noexcept;
 
             // usage
             bool initialize(VkDevice vkDevice, const VkFenceCreateInfo& createInfo) noexcept;
@@ -32,7 +34,7 @@ namespace keplar
             bool isValid() const noexcept { return m_vkFence != VK_NULL_HANDLE; }
 
         private:
-            VkFence m_vkFence;
             VkDevice m_vkDevice;
+            VkFence m_vkFence;
     };  
 }   // namespace keplar

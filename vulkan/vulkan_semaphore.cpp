@@ -8,8 +8,8 @@
 namespace keplar
 {
     VulkanSemaphore::VulkanSemaphore() noexcept
-        : m_vkSemaphore(VK_NULL_HANDLE)
-        , m_vkDevice(VK_NULL_HANDLE)
+        : m_vkDevice(VK_NULL_HANDLE)
+        , m_vkSemaphore(VK_NULL_HANDLE)
     {
     }
 
@@ -23,6 +23,37 @@ namespace keplar
             m_vkDevice = VK_NULL_HANDLE;
             VK_LOG_INFO("semaphore object destroyed successfully");
         }
+    }
+
+    VulkanSemaphore::VulkanSemaphore(VulkanSemaphore&& other) noexcept
+        : m_vkDevice(VK_NULL_HANDLE)
+        , m_vkSemaphore(VK_NULL_HANDLE)
+    {
+        // reset the other
+        other.m_vkDevice = VK_NULL_HANDLE;
+        other.m_vkSemaphore = VK_NULL_HANDLE;
+    }
+
+    VulkanSemaphore& VulkanSemaphore::operator=(VulkanSemaphore&& other) noexcept
+    {
+        if (this != &other)
+        {
+            // release current resources
+            if (m_vkSemaphore != VK_NULL_HANDLE)
+            {
+                vkDestroySemaphore(m_vkDevice, m_vkSemaphore, nullptr);
+            }
+
+            // transfer ownership
+            m_vkDevice = other.m_vkDevice;
+            m_vkSemaphore = other.m_vkSemaphore;
+
+            // reset the other
+            other.m_vkDevice = VK_NULL_HANDLE;
+            other.m_vkSemaphore = VK_NULL_HANDLE;
+        }
+
+        return *this;
     }
 
     bool VulkanSemaphore::initialize(VkDevice vkDevice, const VkSemaphoreCreateInfo& createInfo) noexcept

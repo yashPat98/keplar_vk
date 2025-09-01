@@ -11,6 +11,7 @@ namespace keplar
         : m_vkDevice(VK_NULL_HANDLE)
         , m_vkPipeline(VK_NULL_HANDLE)
         , m_vkPipelineLayout(VK_NULL_HANDLE)
+        , m_vkPipelineCache(VK_NULL_HANDLE)
     {
     }
 
@@ -34,6 +35,56 @@ namespace keplar
             m_vkPipelineLayout = VK_NULL_HANDLE;
         }
     }
+
+    VulkanPipeline::VulkanPipeline(VulkanPipeline&& other) noexcept
+        : m_vkDevice(other.m_vkDevice)
+        , m_vkPipeline(other.m_vkPipeline)
+        , m_vkPipelineLayout(other.m_vkPipelineLayout)
+        , m_vkPipelineCache(other.m_vkPipelineCache)
+    {
+        // reset the other
+        other.m_vkDevice = VK_NULL_HANDLE;
+        other.m_vkPipeline = VK_NULL_HANDLE;
+        other.m_vkPipelineLayout = VK_NULL_HANDLE;
+        other.m_vkPipelineCache = VK_NULL_HANDLE;
+    }
+
+    VulkanPipeline& VulkanPipeline::operator=(VulkanPipeline&& other) noexcept
+    {
+        if (this != &other)
+        {
+            // release current resources
+            if (m_vkPipeline != VK_NULL_HANDLE)
+            {
+                vkDestroyPipeline(m_vkDevice, m_vkPipeline, nullptr);
+            }
+
+            if (m_vkPipelineCache != VK_NULL_HANDLE)
+            {
+                vkDestroyPipelineCache(m_vkDevice, m_vkPipelineCache, nullptr);
+            }
+
+            if (m_vkPipelineLayout != VK_NULL_HANDLE)
+            {
+                vkDestroyPipelineLayout(m_vkDevice, m_vkPipelineLayout, nullptr);
+            }
+
+            // transfer ownership
+            m_vkDevice = other.m_vkDevice;
+            m_vkPipeline = other.m_vkPipeline;
+            m_vkPipelineLayout = other.m_vkPipelineLayout;
+            m_vkPipelineCache = other.m_vkPipelineCache;
+
+            // reset the other
+            other.m_vkDevice = VK_NULL_HANDLE;
+            other.m_vkPipeline = VK_NULL_HANDLE;
+            other.m_vkPipelineLayout = VK_NULL_HANDLE;
+            other.m_vkPipelineCache = VK_NULL_HANDLE;
+        }
+        
+        return *this;
+    }
+
 
     bool VulkanPipeline::initialize(VkDevice vkDevice, const GraphicsPipelineConfig& pipelineConfig) noexcept
     {
@@ -81,6 +132,7 @@ namespace keplar
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipelineCreateInfo.pNext = nullptr;
         pipelineCreateInfo.flags = 0;
+        pipelineCreateInfo.stageCount = static_cast<uint32_t>(pipelineConfig.mShaderStages.size());
         pipelineCreateInfo.pStages = pipelineConfig.mShaderStages.data();
         pipelineCreateInfo.pVertexInputState = &pipelineConfig.mVertexInputState; 
         pipelineCreateInfo.pInputAssemblyState = &pipelineConfig.mInputAssemblyState;

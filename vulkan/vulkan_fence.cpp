@@ -9,8 +9,8 @@
 namespace keplar
 {
     VulkanFence::VulkanFence() noexcept
-        : m_vkFence(VK_NULL_HANDLE)
-        , m_vkDevice(VK_NULL_HANDLE)
+        : m_vkDevice(VK_NULL_HANDLE) 
+        , m_vkFence(VK_NULL_HANDLE) 
     {
     }
 
@@ -24,6 +24,37 @@ namespace keplar
             m_vkDevice = VK_NULL_HANDLE;
             VK_LOG_INFO("fence object destroyed successfully");
         }
+    }
+
+    VulkanFence::VulkanFence(VulkanFence&& other) noexcept
+        : m_vkDevice(other.m_vkDevice)
+        , m_vkFence(other.m_vkFence)
+    {
+        // reset the other
+        other.m_vkDevice = VK_NULL_HANDLE;
+        other.m_vkFence = VK_NULL_HANDLE;
+    }
+
+    VulkanFence& VulkanFence::operator=(VulkanFence&& other) noexcept
+    {
+        if (this != &other)
+        {
+            // release current resources
+            if (m_vkFence != VK_NULL_HANDLE)
+            {
+                vkDestroyFence(m_vkDevice, m_vkFence, nullptr);
+            }
+
+            // transfer ownership
+            m_vkDevice = other.m_vkDevice;
+            m_vkFence = other.m_vkFence;
+
+            // reset the source
+            other.m_vkDevice = VK_NULL_HANDLE;
+            other.m_vkFence = VK_NULL_HANDLE;
+        }
+
+        return *this;
     }
 
     bool VulkanFence::initialize(VkDevice vkDevice, const VkFenceCreateInfo& createInfo) noexcept

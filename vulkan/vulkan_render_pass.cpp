@@ -8,7 +8,8 @@
 namespace keplar
 {
     VulkanRenderPass::VulkanRenderPass() noexcept
-        : m_vkRenderPass(VK_NULL_HANDLE)
+        : m_vkDevice(VK_NULL_HANDLE)
+        , m_vkRenderPass(VK_NULL_HANDLE)
     {
     }
 
@@ -22,6 +23,37 @@ namespace keplar
             m_vkRenderPass = VK_NULL_HANDLE;
             VK_LOG_INFO("vulkan render pass destroyed successfully");
         }
+    }
+
+    VulkanRenderPass::VulkanRenderPass(VulkanRenderPass&& other) noexcept
+        : m_vkDevice(other.m_vkDevice)
+        , m_vkRenderPass(other.m_vkRenderPass)
+    {
+        // reset the other
+        other.m_vkDevice = VK_NULL_HANDLE;
+        other.m_vkRenderPass = VK_NULL_HANDLE;
+    }
+
+    VulkanRenderPass& VulkanRenderPass::operator=(VulkanRenderPass&& other) noexcept
+    {
+        if (this != &other)
+        {
+            // release current resources
+            if (m_vkRenderPass != VK_NULL_HANDLE)
+            {
+                vkDestroyRenderPass(m_vkDevice, m_vkRenderPass, nullptr);
+            }
+
+            // transfer ownership
+            m_vkDevice = other.m_vkDevice;
+            m_vkRenderPass = other.m_vkRenderPass;
+
+            // reset the other
+            other.m_vkDevice = VK_NULL_HANDLE;
+            other.m_vkRenderPass = VK_NULL_HANDLE;
+        }
+
+        return *this;
     }
  
     bool VulkanRenderPass::initialize(VkDevice vkDevice,

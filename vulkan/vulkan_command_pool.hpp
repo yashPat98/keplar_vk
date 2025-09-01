@@ -19,11 +19,13 @@ namespace keplar
             VulkanCommandPool() noexcept;
             ~VulkanCommandPool();
 
-            // disable copy and move semantics to enforce unique ownership
+            // disable copy semantics to enforce unique ownership
             VulkanCommandPool(const VulkanCommandPool&) = delete;
             VulkanCommandPool& operator=(const VulkanCommandPool&) = delete;
-            VulkanCommandPool(VulkanCommandPool&&) = delete;
-            VulkanCommandPool& operator=(VulkanCommandPool&&) = delete; 
+
+            // move semantics
+            VulkanCommandPool(VulkanCommandPool&&) noexcept;
+            VulkanCommandPool& operator=(VulkanCommandPool&&) noexcept; 
             
             // pool operations
             bool initialize(VkDevice vkDevice, const VkCommandPoolCreateInfo& createInfo) noexcept;

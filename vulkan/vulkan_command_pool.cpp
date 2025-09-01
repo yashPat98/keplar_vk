@@ -28,6 +28,42 @@ namespace keplar
         }
     }
 
+    VulkanCommandPool::VulkanCommandPool(VulkanCommandPool&& other) noexcept
+        : m_vkDevice(other.m_vkDevice)
+        , m_vkCommandPool(other.m_vkCommandPool)
+        , m_queueFamilyIndex(other.m_queueFamilyIndex)
+    {
+        // reset the other
+        other.m_vkDevice = VK_NULL_HANDLE;
+        other.m_vkCommandPool = VK_NULL_HANDLE;
+        other.m_queueFamilyIndex = std::nullopt;
+    }
+
+    VulkanCommandPool& VulkanCommandPool::operator=(VulkanCommandPool&& other) noexcept
+    {
+        // avoid self-move
+        if (this != &other)
+        {
+            // release current resources
+            if (m_vkCommandPool != VK_NULL_HANDLE)
+            {
+                vkDestroyCommandPool(m_vkDevice, m_vkCommandPool, nullptr);
+            }
+
+            // transfer ownership
+            m_vkDevice = other.m_vkDevice;
+            m_vkCommandPool = other.m_vkCommandPool;
+            m_queueFamilyIndex = other.m_queueFamilyIndex;
+
+            // reset the other
+            other.m_vkDevice = VK_NULL_HANDLE;
+            other.m_vkCommandPool = VK_NULL_HANDLE;
+            other.m_queueFamilyIndex = std::nullopt;
+        }
+
+        return *this;
+    }
+
     bool VulkanCommandPool::initialize(VkDevice vkDevice, const VkCommandPoolCreateInfo& createInfo) noexcept
     {
         // validate device handle

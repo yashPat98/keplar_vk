@@ -8,8 +8,8 @@
 namespace keplar
 {
     VulkanFramebuffer::VulkanFramebuffer() noexcept
-        : m_vkFramebuffer(VK_NULL_HANDLE)
-        , m_vkDevice(VK_NULL_HANDLE)
+        : m_vkDevice(VK_NULL_HANDLE)
+        , m_vkFramebuffer(VK_NULL_HANDLE)
     {
     }
 
@@ -23,6 +23,37 @@ namespace keplar
             m_vkDevice = VK_NULL_HANDLE;
             VK_LOG_INFO("vulkan framebuffer destroyed successfully");
         }
+    }
+
+    VulkanFramebuffer::VulkanFramebuffer(VulkanFramebuffer&& other) noexcept
+        : m_vkDevice(other.m_vkDevice)
+        , m_vkFramebuffer(other.m_vkFramebuffer)
+    {
+        // reset the other
+        other.m_vkDevice = VK_NULL_HANDLE;
+        other.m_vkFramebuffer = VK_NULL_HANDLE;
+    }
+
+    VulkanFramebuffer& VulkanFramebuffer::operator=(VulkanFramebuffer&& other) noexcept
+    {
+        if (this != &other)
+        {
+            // release current resources
+            if (m_vkFramebuffer != VK_NULL_HANDLE)
+            {
+                vkDestroyFramebuffer(m_vkDevice, m_vkFramebuffer, nullptr);
+            }
+
+            // transfer ownership
+            m_vkDevice = other.m_vkDevice;
+            m_vkFramebuffer = other.m_vkFramebuffer;
+
+            // reset the source
+            other.m_vkDevice = VK_NULL_HANDLE;
+            other.m_vkFramebuffer = VK_NULL_HANDLE;
+        }
+
+        return *this;
     }
 
     bool VulkanFramebuffer::initialize(VkDevice vkDevice, const VkFramebufferCreateInfo& createInfo) noexcept

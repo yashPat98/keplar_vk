@@ -18,11 +18,13 @@ namespace keplar
             VulkanRenderPass() noexcept;
             ~VulkanRenderPass();
 
-            // disable copy and move semantics to enforce unique ownership
+            // disable copy semantics to enforce unique ownership
             VulkanRenderPass(const VulkanRenderPass&) = delete;
             VulkanRenderPass& operator=(const VulkanRenderPass&) = delete;
-            VulkanRenderPass(VulkanRenderPass&&) = delete;
-            VulkanRenderPass& operator=(VulkanRenderPass&&) = delete;
+
+            // move semantics
+            VulkanRenderPass(VulkanRenderPass&&) noexcept;
+            VulkanRenderPass& operator=(VulkanRenderPass&&) noexcept;
 
             bool initialize(VkDevice vkDevice,
                             const std::vector<VkAttachmentDescription>& attachments,

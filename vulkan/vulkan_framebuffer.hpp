@@ -15,11 +15,13 @@ namespace keplar
             VulkanFramebuffer() noexcept;
             ~VulkanFramebuffer();
 
-            // disable copy and move semantics to enforce unique ownership
+            // disable copy semantics to enforce unique ownership
             VulkanFramebuffer(const VulkanFramebuffer&) = delete;
             VulkanFramebuffer& operator=(const VulkanFramebuffer&) = delete;
-            VulkanFramebuffer(VulkanFramebuffer&&) = delete;
-            VulkanFramebuffer& operator=(VulkanFramebuffer&&) = delete;
+
+            // move semantics
+            VulkanFramebuffer(VulkanFramebuffer&&) noexcept;
+            VulkanFramebuffer& operator=(VulkanFramebuffer&&) noexcept;
 
             bool initialize(VkDevice vkDevice, const VkFramebufferCreateInfo& createInfo) noexcept;
 
@@ -29,8 +31,8 @@ namespace keplar
 
         private:
             // vulkan handles
-            VkFramebuffer m_vkFramebuffer;
             VkDevice m_vkDevice;
+            VkFramebuffer m_vkFramebuffer;
             VkExtent2D m_framebufferExtent;
     };
 }   // namespace keplar
