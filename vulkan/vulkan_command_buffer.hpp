@@ -35,8 +35,15 @@ namespace keplar
             void beginRenderPass(const VkRenderPassBeginInfo& beginInfo, VkSubpassContents contents) noexcept;
             void endRenderPass() noexcept;
   
-            // copy buffer
+            // copy helpers
             void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t regionCount, const VkBufferCopy* copyRegions) noexcept;
+
+            // draw helpers
+            void bindPipeline(VkPipelineBindPoint bindPoint, VkPipeline pipeline) noexcept;
+            void bindDescriptorSets(VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t firstSet, uint32_t descriptorSetCount, 
+                const VkDescriptorSet* pDescriptorSets, uint32_t dynamicOffsetCount = 0, const uint32_t* pDynamicOffsets = nullptr) noexcept;
+            void bindVertexBuffers(uint32_t firstBinding, uint32_t bindingCount, const VkBuffer* pBuffers, const VkDeviceSize* pOffsets) noexcept;
+            void draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) noexcept;
 
             // accessor
             VkCommandBuffer get() const noexcept { return m_vkCommandBuffer; }

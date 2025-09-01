@@ -79,4 +79,29 @@ namespace keplar
         vkCmdCopyBuffer(m_vkCommandBuffer, srcBuffer, dstBuffer, regionCount, copyRegions);
     }
 
+    void VulkanCommandBuffer::bindPipeline(VkPipelineBindPoint bindPoint, VkPipeline pipeline) noexcept
+    {
+        vkCmdBindPipeline(m_vkCommandBuffer, bindPoint, pipeline);
+    }
+    
+    void VulkanCommandBuffer::bindDescriptorSets(VkPipelineBindPoint bindPoint, 
+                                                 VkPipelineLayout layout, 
+                                                 uint32_t firstSet, 
+                                                 uint32_t descriptorSetCount, 
+                                                 const VkDescriptorSet* pDescriptorSets, 
+                                                 uint32_t dynamicOffsetCount, 
+                                                 const uint32_t* pDynamicOffsets) noexcept
+    {
+        vkCmdBindDescriptorSets(m_vkCommandBuffer, bindPoint, layout, firstSet, descriptorSetCount, pDescriptorSets, dynamicOffsetCount, pDynamicOffsets);
+    }
+
+    void VulkanCommandBuffer::bindVertexBuffers(uint32_t firstBinding, uint32_t bindingCount, const VkBuffer* pBuffers, const VkDeviceSize* pOffsets) noexcept
+    {
+        vkCmdBindVertexBuffers(m_vkCommandBuffer, firstBinding, bindingCount, pBuffers, pOffsets);
+    }
+
+    void VulkanCommandBuffer::draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) noexcept
+    {
+        vkCmdDraw(m_vkCommandBuffer, vertexCount, instanceCount, firstVertex, firstInstance); 
+    }
 }   // namespace keplar
