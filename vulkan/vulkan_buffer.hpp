@@ -14,43 +14,52 @@ namespace keplar
     {
         public:
             // creation and destruction
-            VulkanBuffer(const VulkanDevice& vulkanDevice) noexcept;
+            VulkanBuffer() noexcept;
             ~VulkanBuffer();  
 
-            // disable copy and move semantics to enforce unique ownership
+            // disable copy semantics to enforce unique ownership
             VulkanBuffer(const VulkanBuffer&) = delete;
             VulkanBuffer& operator=(const VulkanBuffer&) = delete;
-            VulkanBuffer(VulkanBuffer&&) = delete;
-            VulkanBuffer& operator=(VulkanBuffer&&) = delete;
+
+            // move semantics
+            VulkanBuffer(VulkanBuffer&&) noexcept;
+            VulkanBuffer& operator=(VulkanBuffer&&) noexcept;
  
             // usage
-            bool createHostVisible(const VkBufferCreateInfo& createInfo, const void* data, size_t size) noexcept;
-            bool createDeviceLocal(const VulkanCommandPool& commandPool, 
+            bool createHostVisible(const VulkanDevice& device, 
+                                   const VkBufferCreateInfo& createInfo, 
+                                   const void* data,
+                                   size_t size, 
+                                   bool persistMapped = false) noexcept;
+        
+            bool createDeviceLocal(const VulkanDevice& device,
+                                   const VulkanCommandPool& commandPool, 
                                    const VkBufferCreateInfo& createInfo, 
                                    const void* data, 
                                    size_t size, 
                                    std::optional<std::reference_wrapper<ThreadPool>> threadPool = std::nullopt) noexcept;
-            void waitForUpload() noexcept;
+
+            bool uploadHostVisible(const void* data, size_t size, VkDeviceSize offset = 0) noexcept;
+            void waitForStagingUpload() noexcept;
 
             // accessors
             VkBuffer get() const noexcept { return m_vkBuffer; }  
 
         private:
-            bool createBuffer(const VkBufferCreateInfo& createInfo, 
+            bool createBuffer(const VulkanDevice& device,
+                              const VkBufferCreateInfo& createInfo, 
                               VkMemoryPropertyFlags propertyFlags, 
                               VkBuffer& vkBuffer, 
-                              VkDeviceMemory& vkDeviceMemory,
-                              VkDeviceSize& allocationSize);
+                              VkDeviceMemory& vkDeviceMemory) noexcept;
 
         private:  
-            // immutable vulkan components
-            const VulkanDevice& m_vulkanDevice;
-
             // vulkan handles
-            VkDevice m_vkDevice;
-            VkBuffer m_vkBuffer;
-            VkDeviceMemory m_vkDeviceMemory;
-            VulkanFence m_copyFence;
+            VkDevice         m_vkDevice;
+            VkBuffer         m_vkBuffer;
+            VkDeviceMemory   m_vkDeviceMemory;
+            VkDeviceSize     m_allocationSize;
+            VulkanFence      m_copyFence;
+            void*            m_mappedData;
     }; 
 }   // namespace keplar
 
