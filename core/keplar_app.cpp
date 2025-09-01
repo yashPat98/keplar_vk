@@ -3,16 +3,10 @@
 // ────────────────────────────────────────────
 
 #include "keplar_app.hpp"
+#include "config.hpp"
 #include "utils/logger.hpp"
 #include "platform/platform_factory.hpp"
 #include "vulkan/vk_utils.hpp"
-
-namespace keplar
-{
-    inline constexpr const char* kWindowTitle = "keplar_vk";
-    inline constexpr int kDefaultWidth = 1280;
-    inline constexpr int kDefaultHeight = 720;
-}
 
 namespace keplar
 {
@@ -34,7 +28,7 @@ namespace keplar
         }
 
         // initialize the platform window and system resources
-        if (!m_platform->initialize(kWindowTitle, kDefaultWidth, kDefaultHeight))
+        if (!m_platform->initialize(config::kWindowTitle, config::kDefaultWidth, config::kDefaultHeight))
         {
             return false;
         }
