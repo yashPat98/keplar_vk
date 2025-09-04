@@ -16,6 +16,11 @@
 #include "vulkan/vulkan_fence.hpp"
 #include "vulkan/vulkan_semaphore.hpp"
 #include "vulkan/vulkan_buffer.hpp"
+#include "vulkan/vulkan_shader.hpp"
+#include "vulkan/vulkan_descriptor_set_layout.hpp"
+#include "vulkan/vulkan_descriptor_pool.hpp"
+#include "vulkan/vulkan_pipeline.hpp"
+#include "shader_structs.hpp"
 
 namespace keplar
 {
@@ -36,12 +41,20 @@ namespace keplar
             bool renderFrame() noexcept;
 
         private:
+            bool createCommandPool();
             bool createCommandBuffers();
-            bool createRenderPasses();
+            bool createVertexBuffers();
+            bool createUniformBuffers();
+            bool createShaderModules();
+            bool createDescriptorSetLayouts();
+            bool createDescriptorPool();
+            bool createDescriptorSets();
+            bool createRenderPasses(); 
+            bool createGraphicsPipeline();
             bool createFramebuffers();
             bool createSyncPrimitives();
             bool buildCommandBuffers();
-            bool createVertexBuffer();
+            bool updateUniformBuffer();
 
         private:
             // per frame sync primitives
@@ -76,7 +89,18 @@ namespace keplar
             std::vector<VulkanFramebuffer>      m_framebuffers;
             std::vector<FrameSyncPrimitives>    m_frameSyncPrimitives;
             std::atomic<bool>                   m_readyToRender;
-            
-            VulkanBuffer                        m_vertexBuffer;
+
+            VulkanShader                        m_vertexShader;
+            VulkanShader                        m_fragmentShader;
+            VulkanDescriptorSetLayout           m_descriptorSetLayout;
+            VulkanDescriptorPool                m_descriptorPool;
+            VulkanPipeline                      m_graphicsPipeline;
+
+            VulkanBuffer                        m_positionBuffer;
+            VulkanBuffer                        m_colorBuffer;
+
+            std::vector<VulkanBuffer>           m_uniformBuffers;
+            std::vector<VkDescriptorSet>        m_descriptorSets;
+            std::vector<ubo::FrameData>         m_uboFrameData;
     };
 }   // namespace keplar
