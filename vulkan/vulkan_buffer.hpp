@@ -26,21 +26,9 @@ namespace keplar
             VulkanBuffer& operator=(VulkanBuffer&&) noexcept;
  
             // usage
-            bool createHostVisible(const VulkanDevice& device, 
-                                   const VkBufferCreateInfo& createInfo, 
-                                   const void* data,
-                                   size_t size, 
-                                   bool persistMapped = false) noexcept;
-        
-            bool createDeviceLocal(const VulkanDevice& device,
-                                   const VulkanCommandPool& commandPool, 
-                                   const VkBufferCreateInfo& createInfo, 
-                                   const void* data, 
-                                   size_t size, 
-                                   std::optional<std::reference_wrapper<ThreadPool>> threadPool = std::nullopt) noexcept;
-
-            bool uploadHostVisible(const void* data, size_t size, VkDeviceSize offset = 0) noexcept;
-            void waitForStagingUpload() noexcept;
+            bool createHostVisible(const VulkanDevice& device, const VkBufferCreateInfo& createInfo, const void* data, size_t size, bool persistMapped = false) noexcept;
+            bool createDeviceLocal(const VulkanDevice& device, const VulkanCommandPool& commandPool, const VkBufferCreateInfo& createInfo, const void* data, size_t size) noexcept;
+            bool uploadHostVisible(const void* data, size_t size, VkDeviceSize offset = 0, bool mapFullAllocation = false) noexcept;
 
             // accessors
             VkBuffer get() const noexcept { return m_vkBuffer; }  
@@ -58,7 +46,6 @@ namespace keplar
             VkBuffer         m_vkBuffer;
             VkDeviceMemory   m_vkDeviceMemory;
             VkDeviceSize     m_allocationSize;
-            VulkanFence      m_copyFence;
             void*            m_mappedData;
     }; 
 }   // namespace keplar

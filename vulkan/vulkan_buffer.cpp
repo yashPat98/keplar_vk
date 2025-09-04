@@ -47,7 +47,6 @@ namespace keplar
         , m_vkBuffer(other.m_vkBuffer)
         , m_vkDeviceMemory(other.m_vkDeviceMemory)
         , m_allocationSize(other.m_allocationSize)
-        , m_copyFence(std::move(other.m_copyFence))
         , m_mappedData(other.m_mappedData)
     {
         // reset the other
@@ -84,7 +83,6 @@ namespace keplar
             m_vkBuffer       = other.m_vkBuffer;
             m_vkDeviceMemory = other.m_vkDeviceMemory;
             m_allocationSize = other.m_allocationSize;
-            m_copyFence      = std::move(other.m_copyFence);
             m_mappedData     = other.m_mappedData;  
             
             // reset the other
@@ -147,8 +145,7 @@ namespace keplar
                                          const VulkanCommandPool& commandPool, 
                                          const VkBufferCreateInfo& createInfo, 
                                          const void* data, 
-                                         size_t size, 
-                                         std::optional<std::reference_wrapper<ThreadPool>> threadPool) noexcept
+                                         size_t size) noexcept
     {
         // validate input data
         if (data == nullptr || size == 0)
@@ -245,7 +242,9 @@ namespace keplar
         fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceCreateInfo.pNext = nullptr;
         fenceCreateInfo.flags = 0;  
-        m_copyFence.initialize(m_vkDevice, fenceCreateInfo);
+
+        VulkanFence copyFence;
+        copyFence.initialize(m_vkDevice, fenceCreateInfo);
  
         // submit info for executing the command buffer
         VkCommandBuffer vkCommandBuffer = commandBuffer.get();
@@ -256,7 +255,7 @@ namespace keplar
         vkSubmitInfo.pCommandBuffers = &vkCommandBuffer;
 
         // submit the copy command and signal the fence on completion
-        vkResult = vkQueueSubmit(device.getGraphicsQueue(), 1, &vkSubmitInfo, m_copyFence.get());
+        vkResult = vkQueueSubmit(device.getGraphicsQueue(), 1, &vkSubmitInfo, copyFence.get());
         if (vkResult != VK_SUCCESS)
         {
             VK_LOG_FATAL("vkQueueSubmit failed for buffer copy from host to device : %s (code: %d)", string_VkResult(vkResult), vkResult);
@@ -265,36 +264,17 @@ namespace keplar
             return false;
         }
 
-        if (threadPool)
-        { 
-            // cleanup resources asynchronously on a worker thread
-            threadPool->get().dispatch([this, 
-                                        vkBufferStaging, 
-                                        vkDeviceMemoryStaging, 
-                                        vkCommandPool = commandPool.get(), 
-                                        vkCommandBuffer = commandBuffer.get()]()
-            {
-                m_copyFence.wait();  
-                vkFreeCommandBuffers(m_vkDevice, vkCommandPool, 1, &vkCommandBuffer);
-                vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
-                vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
-                VK_LOG_DEBUG("VulkanBuffer::createDeviceLocal staging resources freed successfully");
-            });
-        }
-        else 
-        {
-            // cleanup resources synchronously on current thread
-            m_copyFence.wait();
-            commandPool.freeBuffer(commandBuffer);
-            vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
-            vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
-        }
+        // cleanup staging resources 
+        copyFence.wait();
+        commandPool.freeBuffer(commandBuffer);
+        vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
+        vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
 
         VK_LOG_DEBUG("VulkanBuffer::createDeviceLocal successful");
         return true;
     }
 
-    bool VulkanBuffer::uploadHostVisible(const void* data, size_t size, VkDeviceSize offset) noexcept
+    bool VulkanBuffer::uploadHostVisible(const void* data, size_t size, VkDeviceSize offset, bool mapFullAllocation) noexcept
     {
         // validate input data
         if (data == nullptr || size == 0)
@@ -310,9 +290,12 @@ namespace keplar
             return true;
         }
 
+        // choose mapping size: either full allocation or just the provided size
+        VkDeviceSize mapSize = mapFullAllocation ? m_allocationSize : size;
+
         // map buffer memory for host access
         void* mappedData = nullptr;
-        VkResult vkResult = vkMapMemory(m_vkDevice, m_vkDeviceMemory, offset, m_allocationSize, 0, &mappedData);
+        VkResult vkResult = vkMapMemory(m_vkDevice, m_vkDeviceMemory, offset, mapSize, 0, &mappedData);
         if (vkResult != VK_SUCCESS)
         {
             VK_LOG_FATAL("vkMapMemory failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
@@ -325,15 +308,6 @@ namespace keplar
         // unmap buffer memory after copy
         vkUnmapMemory(m_vkDevice, m_vkDeviceMemory);
         return true;
-    }
-
-    void VulkanBuffer::waitForStagingUpload() noexcept
-    {
-        // wait until the GPU completes the buffer copy command
-        if (m_copyFence.isValid())
-        {
-            m_copyFence.wait();
-        }
     }
 
     bool VulkanBuffer::createBuffer(const VulkanDevice& device,
