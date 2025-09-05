@@ -28,16 +28,18 @@ namespace keplar
             VulkanSwapchain& operator=(VulkanSwapchain&&) = delete;
 
             // accessors
-            VkSwapchainKHR get() const noexcept;
-            VkFormat getFormat() const noexcept;
-            VkColorSpaceKHR getColorSpace() const noexcept;
-            VkPresentModeKHR getPresentMode() const noexcept;
-            VkExtent2D getExtent() const noexcept;
-            uint32_t getImageCount() const noexcept;
+            VkSwapchainKHR                  get() const noexcept                   { return m_vkSwapchainKHR; }
+            const std::vector<VkImage>&     getColorImages() const noexcept        { return m_colorImages; }
+            const std::vector<VkImageView>& getColorImageViews() const noexcept    { return m_colorImageViews; }
+            VkImage                         getDepthImage() const noexcept         { return m_depthImage; }
+            VkImageView                     getDepthImageView() const noexcept     { return m_depthImageView; }
+            VkFormat                        getColorFormat() const noexcept        { return m_vkSurfaceFormatKHR.format; }
+            VkFormat                        getDepthFormat() const noexcept        { return m_depthFormat; }
+            VkColorSpaceKHR                 getColorSpace() const noexcept         { return m_vkSurfaceFormatKHR.colorSpace; }
+            VkPresentModeKHR                getPresentMode() const noexcept        { return m_vkPresentModeKHR; }
+            VkExtent2D                      getExtent() const noexcept             { return m_imageExtent; }
+            uint32_t                        getImageCount() const noexcept         { return m_imageCount; }
 
-            const std::vector<VkImage>& getImages() const noexcept; 
-            const std::vector<VkImageView>& getImageViews() const noexcept;
- 
         private:
             // construction helpers
             VulkanSwapchain() noexcept;
@@ -49,7 +51,8 @@ namespace keplar
             void choosePreTransform(const VkSurfaceCapabilitiesKHR& surfaceCapabilities) noexcept;
             bool createSwapchain(VkSurfaceKHR surface, QueueFamilyIndices indices) noexcept;
             bool recreateSwapchain(const VulkanSurface& surface, const VulkanDevice& device, VkExtent2D windowExtent) noexcept;
-            bool createImageViews() noexcept;
+            bool createColorAttachment() noexcept;
+            bool createDepthAttachment(const VulkanDevice& device) noexcept;
 
         private:
             // vulkan handles
@@ -64,7 +67,12 @@ namespace keplar
             VkSurfaceTransformFlagBitsKHR m_preTransform;
 
             // swapchain resources
-            std::vector<VkImage> m_images;
-            std::vector<VkImageView> m_imageViews;
+            std::vector<VkImage> m_colorImages;
+            std::vector<VkImageView> m_colorImageViews;
+
+            VkImage m_depthImage;
+            VkDeviceMemory m_depthDeviceMemory;
+            VkImageView m_depthImageView;
+            VkFormat m_depthFormat;
     };
 }   // namespace keplar

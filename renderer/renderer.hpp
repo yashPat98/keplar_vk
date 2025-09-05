@@ -102,5 +102,7 @@ namespace keplar
             std::vector<VulkanBuffer>           m_uniformBuffers;
             std::vector<VkDescriptorSet>        m_descriptorSets;
             std::vector<ubo::FrameData>         m_uboFrameData;
+
+            glm::mat4                           m_projectionMatrix;
     };
 }   // namespace keplar

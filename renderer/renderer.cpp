@@ -28,6 +28,15 @@ namespace keplar
         // to prevent CPU stalling while waiting for an image to become available for rendering.
         // setting an upper limit of 3 balances throughput and avoids stalls.
         VK_LOG_INFO("Renderer::Renderer max frames in flight : %d", m_maxFramesInFlight);
+
+        // calculate aspect ratio of swapchain extent
+        const VkExtent2D extent = m_vulkanSwapchain.getExtent();
+        const float aspectRatio = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+
+        // initialize projection matrix and flip y-axis to match vulkan NDC coordinate system
+        m_projectionMatrix = glm::mat4(1.0f);
+        m_projectionMatrix = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
+        m_projectionMatrix[1][1] *= -1.0f;
     }
 
     Renderer::~Renderer()
@@ -394,26 +403,36 @@ namespace keplar
         // color attachment description
         VkAttachmentDescription colorAttachment{};
         colorAttachment.flags = 0;
-        colorAttachment.format = m_vulkanSwapchain.getFormat();
-        colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;                    // no multisampling
-        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;               // clear before rendering
-        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;             // store after rendering
-        colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;    // depth and stencil load operation
-        colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;  // depth and stencil store operation
-        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;          // initial layout undefined
-        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;      // presentable image
+        colorAttachment.format = m_vulkanSwapchain.getColorFormat();
+        colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;                    
+        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;              
+        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;             
+        colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;    
+        colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;  
+        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;          
+        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;      
+
+        // depth attachment description
+        VkAttachmentDescription depthAttachment{};
+        depthAttachment.flags = 0;
+        depthAttachment.format = m_vulkanSwapchain.getDepthFormat();
+        depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;                   
+        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;            
+        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;             
+        depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;   
+        depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;  
+        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;         
+        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;      
 
         // color attachment references
         VkAttachmentReference colorAttachmentRef{};
         colorAttachmentRef.attachment = 0;                                       
         colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;    
 
-        // depth attachment
-        VkAttachmentDescription depthAttachment{};
-        // ...
-
+        // depth attachment references
         VkAttachmentReference depthAttachmentRef{};
-        // ...
+        depthAttachmentRef.attachment = 1;
+        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
         // subpass description
         VkSubpassDescription subpass{};
@@ -424,11 +443,11 @@ namespace keplar
         subpass.colorAttachmentCount = 1;                                   
         subpass.pColorAttachments = &colorAttachmentRef;                    
         subpass.pResolveAttachments = nullptr;
-        subpass.pDepthStencilAttachment = nullptr;
+        subpass.pDepthStencilAttachment = &depthAttachmentRef;
         subpass.preserveAttachmentCount = 0;
         subpass.pPreserveAttachments = nullptr;
 
-        std::vector<VkAttachmentDescription> attachments { colorAttachment };
+        std::vector<VkAttachmentDescription> attachments { colorAttachment, depthAttachment };
         std::vector<VkSubpassDescription> subpasses { subpass };
 
         // setup render pass with specified attachments, subpasses and dependencies
@@ -531,6 +550,21 @@ namespace keplar
         multisampleState.flags = 0;
         multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
+        // depth stencil state
+        VkPipelineDepthStencilStateCreateInfo depthStencilState{};
+        depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;                       
+        depthStencilState.pNext = NULL;                                                                            
+        depthStencilState.flags = 0;                                                                                
+        depthStencilState.depthTestEnable = VK_TRUE;                                                                
+        depthStencilState.depthWriteEnable = VK_TRUE;                                                               
+        depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;                                          
+        depthStencilState.depthBoundsTestEnable = VK_FALSE;
+        depthStencilState.back.failOp = VK_STENCIL_OP_KEEP;
+        depthStencilState.back.passOp = VK_STENCIL_OP_KEEP;
+        depthStencilState.back.compareOp = VK_COMPARE_OP_ALWAYS;
+        depthStencilState.stencilTestEnable = VK_FALSE;
+        depthStencilState.front = depthStencilState.back;
+
         // color blend state
         VkPipelineColorBlendAttachmentState colorBlendAttachment{};
         colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -553,6 +587,7 @@ namespace keplar
         pipelineConfig.mViewportState = viewportState;
         pipelineConfig.mRasterizationState = rasterizationState;
         pipelineConfig.mMultisampleState = multisampleState;
+        pipelineConfig.mDepthStencilState = depthStencilState;
         pipelineConfig.mColorBlendState = colorBlendState;
         pipelineConfig.mRenderPass = m_renderPass.get();
         pipelineConfig.mSubpassIndex = 0;
@@ -572,16 +607,16 @@ namespace keplar
     bool Renderer::createFramebuffers()
     {
         // get swapchain properties
-        const auto swapchainImageViews = m_vulkanSwapchain.getImageViews();
+        const auto colorImageViews = m_vulkanSwapchain.getColorImageViews();
+        const auto depthImageView  = m_vulkanSwapchain.getDepthImageView();
         const auto swapchainExtent = m_vulkanSwapchain.getExtent();
 
-        // common framebuffer creation info
+        // framebuffer creation info
         VkFramebufferCreateInfo framebufferCreateInfo{};
         framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebufferCreateInfo.pNext = nullptr;
         framebufferCreateInfo.flags = 0;
         framebufferCreateInfo.renderPass = m_renderPass.get();
-        framebufferCreateInfo.attachmentCount = 1;
         framebufferCreateInfo.width = swapchainExtent.width;
         framebufferCreateInfo.height = swapchainExtent.height;
         framebufferCreateInfo.layers = 1;
@@ -589,10 +624,15 @@ namespace keplar
         // create framebuffer per swapchain image view
         for (uint32_t i = 0; i < m_swapchainImageCount; ++i)
         {
-            framebufferCreateInfo.pAttachments = &swapchainImageViews[i];
+            // set attachments for this framebuffer
+            VkImageView attachments[2] = { colorImageViews[i], depthImageView };
+            framebufferCreateInfo.attachmentCount = 2;
+            framebufferCreateInfo.pAttachments = attachments;
+
+            // initialize framebuffer 
             if (!m_framebuffers[i].initialize(m_vkDevice, framebufferCreateInfo))
             {
-                VK_LOG_ERROR("Renderer::createFramebuffers failed to initialize framebuffer : %u", i);
+                VK_LOG_ERROR("Renderer::createFramebuffers failed at swapchain image index %u", i);
                 return false;
             }
         }
@@ -648,13 +688,11 @@ namespace keplar
 
     bool Renderer::buildCommandBuffers()
     {
-        // clear color used at the start of render pass
-        VkClearValue clearColor{};
-        clearColor.color.float32[0] = 0.0f;       // red
-        clearColor.color.float32[1] = 0.0f;       // green
-        clearColor.color.float32[2] = 0.0f;       // blue
-        clearColor.color.float32[3] = 1.0f;       // alpha
-
+        // clear values for render pass; color: 0, depth-stencil: 1
+        VkClearValue clearValues[2]{};
+        clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+        clearValues[1].depthStencil = { 1.0f, 0 };
+        
         // render pass begin info (framebuffer updated per command buffer)
         VkRenderPassBeginInfo renderPassBeginInfo{};
         renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -662,8 +700,8 @@ namespace keplar
         renderPassBeginInfo.renderPass = m_renderPass.get();
         renderPassBeginInfo.renderArea.offset = {0, 0};
         renderPassBeginInfo.renderArea.extent = m_vulkanSwapchain.getExtent();
-        renderPassBeginInfo.clearValueCount = 1;
-        renderPassBeginInfo.pClearValues = &clearColor;
+        renderPassBeginInfo.clearValueCount = 2;
+        renderPassBeginInfo.pClearValues = clearValues;
 
         // vertex buffer bindings: position at binding 0, color at binding 1
         VkBuffer vertexBuffers[] = { m_positionBuffer.get(), m_colorBuffer.get() };
@@ -686,7 +724,7 @@ namespace keplar
             m_commandBuffers[i].bindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
             m_commandBuffers[i].bindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.getLayout(), 0, 1, &m_descriptorSets[i]);
             m_commandBuffers[i].bindVertexBuffers(0, 2, vertexBuffers, offset);
-            m_commandBuffers[i].draw(6, 1, 0, 0); 
+            m_commandBuffers[i].draw(3, 1, 0, 0); 
 
             // end current render pass
             m_commandBuffers[i].endRenderPass();
@@ -704,16 +742,11 @@ namespace keplar
 
     bool Renderer::updateUniformBuffer()
     {    
-        // calculate aspect ratio
-        const VkExtent2D extent = m_vulkanSwapchain.getExtent();
-        const float aspectRatio = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-
         // update matrices for the current frame
         ubo::FrameData& frameData = m_uboFrameData[m_currentImageIndex];
         frameData.model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
         frameData.view = glm::mat4(1.0f);
-        frameData.projection = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
-        frameData.projection[1][1] *= -1.0f;
+        frameData.projection = m_projectionMatrix;
 
         // upload data to the host-visible uniform buffer
         if (!m_uniformBuffers[m_currentImageIndex].uploadHostVisible(&frameData, sizeof(frameData)))
