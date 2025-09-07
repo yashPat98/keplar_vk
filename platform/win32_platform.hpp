@@ -20,11 +20,12 @@ namespace keplar
             virtual bool shouldClose() noexcept override;
             virtual void shutdown() noexcept override;
 
-            virtual VkSurfaceKHR createVulkanSurface(VkInstance vkInstance) const noexcept override;
-            virtual std::vector<std::string_view> getSurfaceInstanceExtensions() const noexcept override;
-            virtual void* getNativeWindowHandle() const noexcept override;
+            virtual void* getWindowHandle() const noexcept override;
             virtual uint32_t getWindowWidth() const noexcept override;
             virtual uint32_t getWindowHeight() const noexcept override;
+
+            virtual VkSurfaceKHR createVulkanSurface(VkInstance vkInstance) const noexcept override;
+            virtual std::vector<std::string_view> getSurfaceInstanceExtensions() const noexcept override;
 
         private:
             void toggleFullscreen();

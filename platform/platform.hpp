@@ -20,10 +20,11 @@ namespace keplar
             virtual bool shouldClose() noexcept = 0;
             virtual void shutdown() noexcept = 0;
             
-            virtual VkSurfaceKHR createVulkanSurface(VkInstance vkInstance) const noexcept = 0;
-            virtual std::vector<std::string_view> getSurfaceInstanceExtensions() const noexcept = 0;
-            virtual void* getNativeWindowHandle() const noexcept = 0;
+            virtual void* getWindowHandle() const noexcept = 0;
             virtual uint32_t getWindowWidth() const noexcept = 0;
             virtual uint32_t getWindowHeight() const noexcept = 0;
+
+            virtual VkSurfaceKHR createVulkanSurface(VkInstance vkInstance) const noexcept = 0;
+            virtual std::vector<std::string_view> getSurfaceInstanceExtensions() const noexcept = 0;
     };
 }   // namespace keplar

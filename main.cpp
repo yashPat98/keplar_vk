@@ -10,6 +10,7 @@ int main([[maybe_unused]]int argc, [[maybe_unused]] char* argv[])
     // start the logging thread early
     auto& logger = keplar::Logger::getInstance();
 
+    // app init 
     keplar::KeplarApp app;
     if (!app.initialize())
     {
@@ -18,12 +19,7 @@ int main([[maybe_unused]]int argc, [[maybe_unused]] char* argv[])
         return EXIT_FAILURE;
     }
 
-    // start game loop
-    const bool status = app.run();
-
-    // shutdown app and flush logs
-    app.shutdown();
-    logger.terminate();
-    return status ? EXIT_SUCCESS : EXIT_FAILURE;;
+    // run the main loop; returns exit code    
+    return app.run();
 }
 

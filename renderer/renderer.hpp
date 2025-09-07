@@ -9,6 +9,7 @@
 
 #include "utils/thread_pool.hpp"
 #include "vulkan/vulkan_context.hpp"
+#include "vulkan/vulkan_swapchain.hpp"
 #include "vulkan/vulkan_command_pool.hpp"
 #include "vulkan/vulkan_command_buffer.hpp"
 #include "vulkan/vulkan_render_pass.hpp"
@@ -28,7 +29,7 @@ namespace keplar
     {
         public:
             // creation and destruction
-            explicit Renderer(const VulkanContext& context) noexcept;
+            explicit Renderer(const VulkanContext& context, uint32_t winWidth, uint32_t winHeight) noexcept;
             ~Renderer();
 
             // disable copy and move semantics to enforce unique ownership
@@ -41,6 +42,7 @@ namespace keplar
             bool renderFrame() noexcept;
 
         private:
+            bool createSwapchain();
             bool createCommandPool();
             bool createCommandBuffers();
             bool createVertexBuffers();
@@ -65,44 +67,57 @@ namespace keplar
                 VulkanFence      mInFlightFence;
             };
 
-            // dedicated thread pool for renderer tasks
+            // dedicated thread pool 
             ThreadPool                          m_threadPool;
 
-            // immutable core vulkan components provided by context
+            // core dependencies
+            const VulkanContext&                m_vulkanContext;
             const VulkanDevice&                 m_vulkanDevice;
-            const VulkanSwapchain&              m_vulkanSwapchain;
+            
+            // swapchain for presentation
+            VulkanSwapchain                     m_vulkanSwapchain; 
 
             // vulkan handles
             VkDevice                            m_vkDevice;
-            VkSwapchainKHR                      m_vkSwapchainKHR;
             VkQueue                             m_presentQueue;
             VkQueue                             m_graphicsQueue;
+            VkSwapchainKHR                      m_vkSwapchainKHR;
 
-            // rendering resources and state
+            // window dimensions
+            uint32_t                            m_windowWidth;
+            uint32_t                            m_windowHeight;
+
+            // rendering state
             uint32_t                            m_swapchainImageCount;
             uint32_t                            m_maxFramesInFlight;
             uint32_t                            m_currentImageIndex;
             uint32_t                            m_currentFrameIndex;
+            std::atomic<bool>                   m_readyToRender;
+
+            // command buffers and synchronization
             VulkanCommandPool                   m_commandPool;
             std::vector<VulkanCommandBuffer>    m_commandBuffers;
             VulkanRenderPass                    m_renderPass;
             std::vector<VulkanFramebuffer>      m_framebuffers;
             std::vector<FrameSyncPrimitives>    m_frameSyncPrimitives;
-            std::atomic<bool>                   m_readyToRender;
-
+            
+            // shaders and pipeline
             VulkanShader                        m_vertexShader;
             VulkanShader                        m_fragmentShader;
             VulkanDescriptorSetLayout           m_descriptorSetLayout;
             VulkanDescriptorPool                m_descriptorPool;
             VulkanPipeline                      m_graphicsPipeline;
 
+            // buffers
             VulkanBuffer                        m_positionBuffer;
             VulkanBuffer                        m_colorBuffer;
-
             std::vector<VulkanBuffer>           m_uniformBuffers;
+
+            // descriptor sets and UBOs
             std::vector<VkDescriptorSet>        m_descriptorSets;
             std::vector<ubo::FrameData>         m_uboFrameData;
-
+            
+            // initial uniform data
             glm::mat4                           m_projectionMatrix;
     };
 }   // namespace keplar

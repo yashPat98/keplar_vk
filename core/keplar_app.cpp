@@ -17,53 +17,30 @@ namespace keplar
     {
     }
 
+    KeplarApp::~KeplarApp()
+    {
+        shutdown();
+    }
+
     bool KeplarApp::initialize() noexcept
     {
-        // create a platform-specific implementation using a factory function.
-        m_platform = platform::createPlatform();
-        if (!m_platform)
-        {
-            VK_LOG_FATAL("failed to create platform instance");
-            return false;
-        }
-
-        // initialize the platform window and system resources
-        if (!m_platform->initialize(config::kWindowTitle, config::kDefaultWidth, config::kDefaultHeight))
-        {
-            return false;
-        }
-
-        // build the vulkan context with required configuration
-        m_vulkanContext = VulkanContext::Builder::Builder()
-                            .withPlatform(*m_platform)
-                            .withInstanceExtensionsIfValidation({ VK_EXT_DEBUG_UTILS_EXTENSION_NAME })
-                            .withValidationLayers({ VK_LAYER_KHRONOS_VALIDATION_NAME })
-                            .withDeviceExtensions({ VK_KHR_SWAPCHAIN_EXTENSION_NAME })
-                            .build();                           
-        if (!m_vulkanContext)
-        {
-            return false;
-        }
-
-        // setup and initialize renderer using context reference
-        m_renderer = std::make_unique<Renderer>(*m_vulkanContext);
-        if (!m_renderer->initialize())
-        {
-            return false;
-        }
+        // high-level orchestration of subsystem creation
+        if (!createPlatform())   { return false; }
+        if (!createContext())    { return false; }
+        if (!createRenderer())   { return false; }
 
         VK_LOG_INFO("KeplarApp::initialize successful");
         return true;
     }
 
-    bool KeplarApp::run() noexcept
+    int KeplarApp::run() noexcept
     {
         while (!m_platform->shouldClose())
         {
             m_platform->pollEvents();
-            m_renderer->renderFrame();              
+            m_renderer->renderFrame();
         }
-        return true;
+        return EXIT_SUCCESS;
     }
 
     void KeplarApp::shutdown() noexcept
@@ -72,6 +49,70 @@ namespace keplar
         m_renderer.reset();
         m_vulkanContext.reset();
         m_platform.reset();
+    }
+
+    bool KeplarApp::createPlatform() noexcept
+    {
+        // create platform-specific implementation
+        m_platform = platform::createPlatform();
+        if (!m_platform)
+        {
+            VK_LOG_FATAL("Failed to create platform instance");
+            return false;
+        }
+
+        // initialize the platform window and system resources
+        if (!m_platform->initialize(config::kWindowTitle, config::kDefaultWidth, config::kDefaultHeight))
+        {
+            VK_LOG_DEBUG("Failed to initialize platform window");
+            return false;
+        }
+
+        return true;
+    }
+
+    bool KeplarApp::createContext() noexcept
+    {
+        // prepare vulkan configuration
+        VulkanContextConfig config{};
+        config.mDeviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
+        // append validation extensions and layers if enabled
+        if (config.mEnableValidation)
+        {
+            config.mInstanceExtensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+            config.mValidationLayers.emplace_back(VK_LAYER_KHRONOS_VALIDATION_NAME);
+        }
+
+        // build vulkan context using platform and config
+        m_vulkanContext = VulkanContext::Builder()
+                            .withPlatform(*m_platform)
+                            .withConfig(config)
+                            .build();
+        if (!m_vulkanContext)
+        {
+            VK_LOG_DEBUG("Failed to create vulkan context");
+            return false;
+        }
+
+        return true;
+    }
+
+    bool KeplarApp::createRenderer() noexcept
+    {
+        // query current window dimensions
+        uint32_t width  = m_platform->getWindowWidth();
+        uint32_t height = m_platform->getWindowHeight();
+
+        // create and initialize renderer
+        m_renderer = std::make_unique<Renderer>(*m_vulkanContext, width, height);
+        if (!m_renderer->initialize())
+        {
+            VK_LOG_DEBUG("Failed to initialize renderer");
+            return false;
+        }
+
+        return true;
     }
 
 }   // namespace keplar

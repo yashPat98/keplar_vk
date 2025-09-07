@@ -15,7 +15,6 @@ namespace keplar
     VulkanContext::~VulkanContext()
     {
         // destroy resources in a reverse order
-        m_vulkanSwapchain.reset();
         m_vulkanDevice.reset();
         m_vulkanSurface.reset();
         m_vulkanInstance.reset();
@@ -44,181 +43,57 @@ namespace keplar
             return false;
         }
 
-        // create swapchain and image views
-        VkExtent2D windowExtent{ platform.getWindowWidth(), platform.getWindowHeight() };
-        m_vulkanSwapchain = VulkanSwapchain::create(*m_vulkanSurface, *m_vulkanDevice, windowExtent);
-        if (!m_vulkanSwapchain)
-        {
-            return false;
-        }
-
         return true;
     }
 
     // ─────────────── VulkanContext::Builder ───────────────
 
-    VulkanContext::Builder& VulkanContext::Builder::withApplicationName(std::string_view appName)
-    {
-        m_vulkanContextConfig.mApplicationName = appName;
-        return *this;
-    }
-
-    VulkanContext::Builder& VulkanContext::Builder::withApplicationVersion(uint32_t appVersion)
-    {
-        m_vulkanContextConfig.mApplicationVersion = appVersion;
-        return *this;
-    }
-
-    VulkanContext::Builder& VulkanContext::Builder::withEngineName(std::string_view engineName)
-    {
-        m_vulkanContextConfig.mEngineName = engineName;
-        return *this;
-    }
-
-    VulkanContext::Builder& VulkanContext::Builder::withEngineVersion(uint32_t engineVersion)
-    {
-        m_vulkanContextConfig.mEngineVersion = engineVersion;
-        return *this;
-    }
-
-    VulkanContext::Builder& VulkanContext::Builder::withApiVersion(uint32_t apiVersion)
-    {
-        m_vulkanContextConfig.mApiVersion = apiVersion;
-        return *this;
-    }
-
-    VulkanContext::Builder& VulkanContext::Builder::enableValidation(bool enable)
-    {
-        m_vulkanContextConfig.mEnableValidation = enable;
-        return *this;
-    }
-
-    VulkanContext::Builder& VulkanContext::Builder::withPlatform(const Platform& platform)
+    VulkanContext::Builder& VulkanContext::Builder::withPlatform(const Platform& platform) noexcept
     {
         m_platform = &platform;
         return *this;
     }
 
-    VulkanContext::Builder& VulkanContext::Builder::withInstanceExtensions(const std::vector<std::string_view>& instanceExtensions)
+    VulkanContext::Builder& VulkanContext::Builder::withConfig(const VulkanContextConfig& config) noexcept
     {
-        auto& existingExtensions = m_vulkanContextConfig.mInstanceExtensions;
-        existingExtensions.reserve(existingExtensions.size() + instanceExtensions.size());
-
-        std::unordered_set<std::string_view> seen(existingExtensions.begin(), existingExtensions.end());
-        for (const auto& extension : instanceExtensions)
-        {
-            // skip duplicates and empty strings
-            if (extension.empty() || !seen.insert(extension).second) 
-            {
-                continue;
-            }
-            existingExtensions.emplace_back(extension);
-        }
-        return *this;
-    }
-
-    VulkanContext::Builder& VulkanContext::Builder::withInstanceExtensionsIfValidation(const std::vector<std::string_view>& instanceExtensions)
-    {
-        if (!m_vulkanContextConfig.mEnableValidation)
-        {
-            return *this;
-        }
-        
-        auto& existingExtensions = m_vulkanContextConfig.mInstanceExtensions;
-        existingExtensions.reserve(existingExtensions.size() + instanceExtensions.size());
-
-        std::unordered_set<std::string_view> seen(existingExtensions.begin(), existingExtensions.end());
-        for (const auto& extension : instanceExtensions)
-        {
-            // skip duplicates and empty strings
-            if (extension.empty() || !seen.insert(extension).second) 
-            {
-                continue;
-            }
-            existingExtensions.emplace_back(extension);
-        }
-        return *this;
-    }
-
-    VulkanContext::Builder& VulkanContext::Builder::withValidationLayers(const std::vector<std::string_view>& validationLayers)
-    {
-        auto& existingLayers = m_vulkanContextConfig.mValidationLayers;
-        existingLayers.reserve(existingLayers.size() + validationLayers.size());
-
-        std::unordered_set<std::string_view> seen(existingLayers.begin(), existingLayers.end());
-        for (auto layer : validationLayers)
-        {
-            if (layer.empty() || !seen.insert(layer).second)
-            {
-                continue;
-            }
-            existingLayers.emplace_back(layer);
-        }
-        return *this;
-    }
-
-    VulkanContext::Builder& VulkanContext::Builder::withDeviceExtensions(const std::vector<std::string_view>& deviceExtensions)
-    {
-        auto& existingExtensions = m_vulkanContextConfig.mDeviceExtensions;
-        existingExtensions.reserve(existingExtensions.size() + deviceExtensions.size());
-
-        std::unordered_set<std::string_view> seen(existingExtensions.begin(), existingExtensions.end());
-        for (auto extension : deviceExtensions)
-        {
-            if (extension.empty() || !seen.insert(extension).second)
-            {
-                continue;
-            }
-            existingExtensions.emplace_back(extension);
-        }
-        return *this;
-    }
-
-    VulkanContext::Builder& VulkanContext::Builder::withDeviceFeatures(VkPhysicalDeviceFeatures features)
-    {
-        m_vulkanContextConfig.mRequestedFeatures = features;
-        return *this;
-    }
-
-    VulkanContext::Builder& VulkanContext::Builder::preferDedicatedComputeQueue()
-    {
-        m_vulkanContextConfig.mPreferDedicatedComputeQueue = true;
-        return *this;
-    }
-
-    VulkanContext::Builder& VulkanContext::Builder::preferDedicatedTransferQueue()
-    {
-        m_vulkanContextConfig.mPreferDedicatedTransferQueue = true;
+        m_config = config;
         return *this;
     }
 
     std::unique_ptr<VulkanContext> VulkanContext::Builder::build()
     {
-        // ensure a valid platform is set 
+        // context requires a valid platform
         if (!m_platform)
         {
-            VK_LOG_FATAL("VulkanContext::Builder::build :: Platform not set.");
+            VK_LOG_FATAL("VulkanContext::Builder::build failed: platform is not specified");
             return nullptr;
         }
 
-        // add platform-specific extensions to config
-        const auto& platformExtensions = m_platform->getSurfaceInstanceExtensions();
-        auto& instanceExtensions = m_vulkanContextConfig.mInstanceExtensions;
-        instanceExtensions.insert(instanceExtensions.begin(), platformExtensions.begin(), platformExtensions.end());
-
-        // add default validation layer if not provided
-        if (m_vulkanContextConfig.mEnableValidation && m_vulkanContextConfig.mValidationLayers.empty())
+         // context require explicit vulkan config
+        if (!m_config.has_value())
         {
-            // VK_EXT_debug_utils extension is must required to receive detailed debug messages from validation layers
-            m_vulkanContextConfig.mInstanceExtensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-            m_vulkanContextConfig.mValidationLayers.emplace_back(VK_LAYER_KHRONOS_VALIDATION_NAME);
+            VK_LOG_FATAL("VulkanContext::Builder::build failed: context config is not specified");
+            return nullptr;
         }
 
-        // create and initialize VulkanContext
-        auto vulkanContext = std::unique_ptr<VulkanContext>(new VulkanContext);
-        if (!vulkanContext->initialize(*m_platform, m_vulkanContextConfig))
+        // append platform-specific instance extensions 
+        VulkanContextConfig config = *m_config;
+        const auto& platformExtensions = m_platform->getSurfaceInstanceExtensions();
+        config.mInstanceExtensions.insert(config.mInstanceExtensions.begin(), platformExtensions.begin(), platformExtensions.end());
+
+        // set default validation layer if none provided
+        if (config.mEnableValidation && config.mValidationLayers.empty())
         {
-            VK_LOG_FATAL("VulkanContext::Builder::build :: failed to build VulkanContext");
+            // VK_EXT_debug_utils extension is must required to receive detailed debug messages from validation layers
+            config.mInstanceExtensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+            config.mValidationLayers.emplace_back(VK_LAYER_KHRONOS_VALIDATION_NAME);
+        }
+
+        // create and initialize context
+        auto vulkanContext = std::unique_ptr<VulkanContext>(new VulkanContext);
+        if (!vulkanContext->initialize(*m_platform, config))
+        {
+            VK_LOG_FATAL("VulkanContext::Builder::build : failed to build VulkanContext");
             return nullptr;
         }
 

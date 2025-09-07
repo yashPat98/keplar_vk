@@ -8,30 +8,25 @@
 
 namespace keplar
 {
-    Renderer::Renderer(const VulkanContext& context) noexcept
+    Renderer::Renderer(const VulkanContext& context, uint32_t winWidth, uint32_t winHeight) noexcept
         : m_threadPool(8)
+        , m_vulkanContext(context)
         , m_vulkanDevice(context.getDevice())
-        , m_vulkanSwapchain(context.getSwapchain())
+        , m_vulkanSwapchain(context)
         , m_vkDevice(m_vulkanDevice.getDevice())
-        , m_vkSwapchainKHR(m_vulkanSwapchain.get())
         , m_presentQueue(m_vulkanDevice.getPresentQueue())
         , m_graphicsQueue(m_vulkanDevice.getGraphicsQueue())
-        , m_swapchainImageCount(m_vulkanSwapchain.getImageCount())
-        , m_maxFramesInFlight(glm::min(3u, m_swapchainImageCount))
+        , m_vkSwapchainKHR(VK_NULL_HANDLE)
+        , m_windowWidth(winWidth)
+        , m_windowHeight(winHeight)
+        , m_swapchainImageCount(0)
+        , m_maxFramesInFlight(0)
         , m_currentImageIndex(0)
         , m_currentFrameIndex(0)
-        , m_framebuffers(m_swapchainImageCount)
-        , m_frameSyncPrimitives(m_maxFramesInFlight)
         , m_readyToRender(false)
     {
-        // vulkan spec suggests max frames in flight should be less than swapchain image count
-        // to prevent CPU stalling while waiting for an image to become available for rendering.
-        // setting an upper limit of 3 balances throughput and avoids stalls.
-        VK_LOG_INFO("Renderer::Renderer max frames in flight : %d", m_maxFramesInFlight);
-
-        // calculate aspect ratio of swapchain extent
-        const VkExtent2D extent = m_vulkanSwapchain.getExtent();
-        const float aspectRatio = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+        // calculate aspect ratio of window
+        const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
 
         // initialize projection matrix and flip y-axis to match vulkan NDC coordinate system
         m_projectionMatrix = glm::mat4(1.0f);
@@ -58,23 +53,24 @@ namespace keplar
     bool Renderer::initialize() noexcept
     {
         // initialize vulkan resources
-        if (!createCommandPool()) { return false; }
-        if (!createCommandBuffers()) { return false; }
-        if (!createVertexBuffers()) { return false; }
-        if (!createUniformBuffers()) { return false; }
-        if (!createShaderModules()) { return false; }
-        if (!createDescriptorSetLayouts()) { return false; }
-        if (!createDescriptorPool()) { return false; }
-        if (!createDescriptorSets()) { return false; }
-        if (!createRenderPasses()) { return false; }
-        if (!createGraphicsPipeline()) { return false; }
-        if (!createFramebuffers()) { return false; }
-        if (!createSyncPrimitives()) { return false; }
-        if (!buildCommandBuffers()) { return false; }
+        if (!createSwapchain())             { return false; }
+        if (!createCommandPool())           { return false; }
+        if (!createCommandBuffers())        { return false; }
+        if (!createVertexBuffers())         { return false; }
+        if (!createUniformBuffers())        { return false; }
+        if (!createShaderModules())         { return false; }
+        if (!createDescriptorSetLayouts())  { return false; }
+        if (!createDescriptorPool())        { return false; }
+        if (!createDescriptorSets())        { return false; }
+        if (!createRenderPasses())          { return false; }
+        if (!createGraphicsPipeline())      { return false; }
+        if (!createFramebuffers())          { return false; }
+        if (!createSyncPrimitives())        { return false; }
+        if (!buildCommandBuffers())         { return false; }
 
         // initialization complete
         m_readyToRender.store(true);
-        
+
         VK_LOG_DEBUG("Renderer::initialize successful");
         return true;
     }
@@ -105,10 +101,10 @@ namespace keplar
             return false;
         }
 
-        // 🔟 update uniform buffer for the current frame
+        // 5️⃣ update uniform buffer for the current frame
         updateUniformBuffer();
 
-        // 5️⃣ prepare submit info to submit command buffer with sync info
+        // 6️⃣ prepare submit info to submit command buffer with sync info
         const VkPipelineStageFlags waitDstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         VkSemaphore waitSemaphore = frameSync.mImageAvailableSemaphore.get();
         VkSemaphore signalSemaphore = frameSync.mRenderCompleteSemaphore.get();
@@ -126,13 +122,13 @@ namespace keplar
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = &signalSemaphore;
 
-        // 6️⃣ submit command buffer to graphics queue with fence to track GPU work
+        // 7️⃣ submit command buffer to graphics queue with fence to track GPU work
         if (!VK_CHECK(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, frameSync.mInFlightFence.get())))
         {
             return false;
         }
 
-        // 7️⃣ prepare present info to present the rendered image
+        // 8️⃣ prepare present info to present the rendered image
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         presentInfo.pNext = nullptr;
@@ -142,14 +138,35 @@ namespace keplar
         presentInfo.pSwapchains = &m_vkSwapchainKHR;
         presentInfo.pImageIndices = &m_currentImageIndex;
 
-        // 8️⃣ queue the present operation
+        // 9️⃣ queue the present operation
         if (!VK_CHECK(vkQueuePresentKHR(m_presentQueue, &presentInfo)))
         {
             return false;
         }
 
-        // 9️⃣ advance to the next frame sync object (cycling through available frames in flight)
+        // 🔟 advance to the next frame sync object (cycling through available frames in flight)
         m_currentFrameIndex = (m_currentFrameIndex + 1) % m_maxFramesInFlight;
+        return true;
+    }
+
+     bool Renderer::createSwapchain()
+    {
+        // setup swapchain
+        if (!m_vulkanSwapchain.initialize(m_windowWidth, m_windowHeight))
+        {
+            VK_LOG_ERROR("Renderer::createSwapchain : failed to create swapchain fpr presentation.");
+            return false;
+        }
+
+        // retrieve swapchain handle and image count
+        m_vkSwapchainKHR = m_vulkanSwapchain.get();
+        m_swapchainImageCount = m_vulkanSwapchain.getImageCount();
+        
+        // vulkan spec suggests max frames in flight should be less than swapchain image count
+        // to prevent CPU stalling while waiting for an image to become available for rendering.
+        // setting an upper limit of 3 balances throughput and avoids stalls.
+        m_maxFramesInFlight = glm::min(3u, m_swapchainImageCount);
+        VK_LOG_INFO("Renderer::createSwapchain : swapchain created successfully (max frames in flight: %d)", m_maxFramesInFlight);
         return true;
     }
 
@@ -606,6 +623,9 @@ namespace keplar
 
     bool Renderer::createFramebuffers()
     {
+        // allocate framebuffer for each swapchain image
+        m_framebuffers.resize(m_swapchainImageCount);
+
         // get swapchain properties
         const auto colorImageViews = m_vulkanSwapchain.getColorImageViews();
         const auto depthImageView  = m_vulkanSwapchain.getDepthImageView();
@@ -643,6 +663,9 @@ namespace keplar
 
     bool Renderer::createSyncPrimitives()
     {
+        // allocate sync primitives for each frame in flight
+        m_frameSyncPrimitives.resize(m_maxFramesInFlight);
+
         // semaphore creation info (binary semaphore)
         VkSemaphoreCreateInfo semaphoreCreateInfo{};
         semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;

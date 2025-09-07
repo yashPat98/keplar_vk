@@ -144,7 +144,7 @@ namespace keplar
         return { VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME };
     }
 
-    void* Win32Platform::getNativeWindowHandle() const noexcept
+    void* Win32Platform::getWindowHandle() const noexcept
     {
         return reinterpret_cast<void*>(m_hwnd);
     }

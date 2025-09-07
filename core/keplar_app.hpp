@@ -16,7 +16,7 @@ namespace keplar
         public:
             // creation and destruction
             KeplarApp() noexcept;
-            ~KeplarApp() = default;
+            ~KeplarApp();
 
             // disable copy and move semantics to enforce unique ownership
             KeplarApp(const KeplarApp&) = delete;
@@ -26,8 +26,14 @@ namespace keplar
 
             // app lifecycle functions
             bool initialize() noexcept;
-            bool run() noexcept;
+            int run() noexcept;
             void shutdown() noexcept;
+
+        private:
+            // initialization helpers
+            bool createPlatform() noexcept;
+            bool createContext() noexcept;
+            bool createRenderer() noexcept;
 
         private:
             std::unique_ptr<Platform> m_platform;

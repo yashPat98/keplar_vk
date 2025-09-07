@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "vk_config.hpp"
+#include "vulkan_context.hpp"
 #include "vulkan_surface.hpp"
 #include "vulkan_device.hpp"
 
@@ -16,9 +17,7 @@ namespace keplar
     {
         public:
             // creation and destruction
-            static std::unique_ptr<VulkanSwapchain> create(const VulkanSurface& surface, 
-                                                           const VulkanDevice& device, 
-                                                           VkExtent2D windowExtent) noexcept;
+            VulkanSwapchain(const VulkanContext& context) noexcept;
             ~VulkanSwapchain();
 
             // disable copy and move semantics to enforce unique ownership
@@ -26,6 +25,8 @@ namespace keplar
             VulkanSwapchain& operator=(const VulkanSwapchain&) = delete;
             VulkanSwapchain(VulkanSwapchain&&) = delete;
             VulkanSwapchain& operator=(VulkanSwapchain&&) = delete;
+
+            bool initialize(uint32_t width, uint32_t height) noexcept;
 
             // accessors
             VkSwapchainKHR                  get() const noexcept                   { return m_vkSwapchainKHR; }
@@ -41,20 +42,22 @@ namespace keplar
             uint32_t                        getImageCount() const noexcept         { return m_imageCount; }
 
         private:
-            // construction helpers
-            VulkanSwapchain() noexcept;
-            bool initialize(const VulkanSurface& surface, const VulkanDevice& device, VkExtent2D windowExtent) noexcept;
-            void chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& surfaceFormats) noexcept;
-            void choosePresentMode(const std::vector<VkPresentModeKHR>& presentModes) noexcept;
+            // initialization helpers
+            bool chooseSurfaceFormat() noexcept;
+            bool choosePresentMode() noexcept;
             void chooseImageCount(const VkSurfaceCapabilitiesKHR& surfaceCapabilities) noexcept;
             void chooseSwapExtent(const VkSurfaceCapabilitiesKHR& surfaceCapabilities, VkExtent2D windowExtent) noexcept;
             void choosePreTransform(const VkSurfaceCapabilitiesKHR& surfaceCapabilities) noexcept;
-            bool createSwapchain(VkSurfaceKHR surface, QueueFamilyIndices indices) noexcept;
-            bool recreateSwapchain(const VulkanSurface& surface, const VulkanDevice& device, VkExtent2D windowExtent) noexcept;
+            bool createSwapchain(VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE) noexcept;
             bool createColorAttachment() noexcept;
-            bool createDepthAttachment(const VulkanDevice& device) noexcept;
+            bool createDepthAttachment() noexcept;
+            void destroyAttachments() noexcept;
 
         private:
+            // dependencies
+            const VulkanDevice& m_device;
+            const VulkanSurface& m_surface;
+
             // vulkan handles
             VkDevice m_vkDevice;
             VkSwapchainKHR m_vkSwapchainKHR;
