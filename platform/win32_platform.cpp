@@ -110,6 +110,9 @@ namespace keplar
 
     void Win32Platform::shutdown() noexcept
     {
+        // remove all listeners on shutdown
+        m_eventManager.removeAllListeners();
+
         // destroy window 
         if (m_hwnd) 
         {
@@ -117,6 +120,31 @@ namespace keplar
             m_hwnd = nullptr;
             VK_LOG_INFO("window is destroyed successfully");
         }
+    }
+
+    void* Win32Platform::getWindowHandle() const noexcept
+    {
+        return reinterpret_cast<void*>(m_hwnd);
+    }
+
+    uint32_t Win32Platform::getWindowWidth() const noexcept
+    {
+        return m_width;
+    }
+
+    uint32_t Win32Platform::getWindowHeight() const noexcept
+    {
+        return m_height;
+    }
+
+    void Win32Platform::addListener(EventListener* listener) noexcept 
+    {
+        m_eventManager.addListener(listener);
+    }
+
+    void Win32Platform::removeListener(EventListener* listener) noexcept 
+    {
+        m_eventManager.removeListener(listener);
     }
 
     VkSurfaceKHR Win32Platform::createVulkanSurface(VkInstance vkInstance) const noexcept
@@ -144,21 +172,6 @@ namespace keplar
         return { VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME };
     }
 
-    void* Win32Platform::getWindowHandle() const noexcept
-    {
-        return reinterpret_cast<void*>(m_hwnd);
-    }
-
-    uint32_t Win32Platform::getWindowWidth() const noexcept
-    {
-        return m_width;
-    }
-
-    uint32_t Win32Platform::getWindowHeight() const noexcept
-    {
-        return m_height;
-    }
-
     LRESULT CALLBACK Win32Platform::WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
     {
         Win32Platform* platform = reinterpret_cast<Win32Platform*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
@@ -173,32 +186,53 @@ namespace keplar
                 // prevent default window destruction by DefWindowProc 
                 // to ensure window and vulkan surface remains valid until 
                 // render loop is exited gracefully
+                platform->m_eventManager.onWindowClose();
                 PostQuitMessage(0);
                 return 0;
 
             case WM_SIZE:
-                if (wParam != SIZE_MINIMIZED)
-                {
-                    platform->m_width = LOWORD(lParam);
-                    platform->m_height = HIWORD(lParam);
-                }
+                platform->m_width = LOWORD(lParam);
+                platform->m_height = HIWORD(lParam);
+                platform->m_eventManager.onWindowResize(platform->m_width, platform->m_height);
                 break;
 
             case WM_KEYDOWN:
+                platform->m_eventManager.onKeyPressed(static_cast<uint32_t>(wParam));
                 switch (wParam)
                 {
-                    case VK_ESCAPE:
-                        PostQuitMessage(0);
-                        break;
-
                     case VK_F11:
                         platform->toggleFullscreen();
+                        break;
+
+                    case VK_ESCAPE:
+                        PostQuitMessage(0);
                         break;
 
                     default:
                         break;
                 }
                 break;
+
+            case WM_KEYUP:
+                platform->m_eventManager.onKeyReleased(static_cast<uint32_t>(wParam));
+                break;
+
+            case WM_MOUSEMOVE:
+                platform->m_eventManager.onMouseMove(static_cast<uint32_t>(LOWORD(lParam)), static_cast<uint32_t>(HIWORD(lParam)));
+                break;
+
+            case WM_MOUSEWHEEL:
+                platform->m_eventManager.onMouseScroll(static_cast<double>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA);
+                break;
+
+            case WM_SETFOCUS:    platform->m_eventManager.onWindowFocus(true);      break;
+            case WM_KILLFOCUS:   platform->m_eventManager.onWindowFocus(false);     break;
+            case WM_LBUTTONDOWN: platform->m_eventManager.onMouseButtonPressed(0);  break;
+            case WM_LBUTTONUP:   platform->m_eventManager.onMouseButtonReleased(0); break;
+            case WM_RBUTTONDOWN: platform->m_eventManager.onMouseButtonPressed(1);  break;
+            case WM_RBUTTONUP:   platform->m_eventManager.onMouseButtonReleased(1); break;
+            case WM_MBUTTONDOWN: platform->m_eventManager.onMouseButtonPressed(2);  break;
+            case WM_MBUTTONUP:   platform->m_eventManager.onMouseButtonReleased(2); break;
 
             default:
                 break;

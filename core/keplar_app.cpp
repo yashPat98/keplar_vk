@@ -45,7 +45,8 @@ namespace keplar
 
     void KeplarApp::shutdown() noexcept
     {
-        // explicitly destroy resources in a reverse order:
+        // teardown subsystems in reverse order
+        m_platform->removeListener(m_renderer.get());
         m_renderer.reset();
         m_vulkanContext.reset();
         m_platform.reset();
@@ -111,6 +112,9 @@ namespace keplar
             VK_LOG_DEBUG("Failed to initialize renderer");
             return false;
         }
+
+        // register renderer as event listener
+        m_platform->addListener(m_renderer.get());
 
         return true;
     }

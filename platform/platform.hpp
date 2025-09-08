@@ -6,7 +6,9 @@
 
 #include <string>
 #include <vector>
+
 #include "vulkan/vk_config.hpp"
+#include "event_listener.hpp"
 
 namespace keplar
 {
@@ -15,15 +17,22 @@ namespace keplar
         public:
             virtual ~Platform() = default;
 
+            // lifecycle
             virtual bool initialize(const std::string& title, int width, int height) noexcept = 0;
             virtual void pollEvents() noexcept = 0;
             virtual bool shouldClose() noexcept = 0;
             virtual void shutdown() noexcept = 0;
             
+            // window queries
             virtual void* getWindowHandle() const noexcept = 0;
             virtual uint32_t getWindowWidth() const noexcept = 0;
             virtual uint32_t getWindowHeight() const noexcept = 0;
 
+            // event listeners
+            virtual void addListener(EventListener* listener) noexcept = 0;
+            virtual void removeListener(EventListener* listener) noexcept = 0;
+
+            // vulkan 
             virtual VkSurfaceKHR createVulkanSurface(VkInstance vkInstance) const noexcept = 0;
             virtual std::vector<std::string_view> getSurfaceInstanceExtensions() const noexcept = 0;
     };
