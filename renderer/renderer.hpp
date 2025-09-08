@@ -7,6 +7,7 @@
 #include <vector>
 #include <atomic>
 
+#include "platform/event_listener.hpp"
 #include "utils/thread_pool.hpp"
 #include "vulkan/vulkan_context.hpp"
 #include "vulkan/vulkan_swapchain.hpp"
@@ -25,7 +26,7 @@
 
 namespace keplar
 {
-    class Renderer final
+    class Renderer final : public EventListener
     {
         public:
             // creation and destruction
@@ -38,8 +39,12 @@ namespace keplar
             Renderer(Renderer&&) = delete;
             Renderer& operator=(Renderer&&) = delete; 
 
+            // initialize vulkan resources and submit frames for rendering
             bool initialize() noexcept;
             bool renderFrame() noexcept;
+
+            // handle window and user input events
+            virtual void onWindowResize(uint32_t, uint32_t) override;
 
         private:
             bool createSwapchain();

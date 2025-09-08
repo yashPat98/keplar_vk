@@ -25,6 +25,7 @@ namespace keplar
 
             // usage
             bool initialize(VkDevice vkDevice, const VkFenceCreateInfo& createInfo) noexcept;
+            void destroy();
             bool wait(uint64_t timeout = UINT64_MAX) const noexcept;
             bool reset() noexcept;
             VkResult isSignaled() noexcept;

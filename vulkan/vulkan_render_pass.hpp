@@ -30,6 +30,7 @@ namespace keplar
                             const std::vector<VkAttachmentDescription>& attachments,
                             const std::vector<VkSubpassDescription>& subpasses,
                             const std::vector<VkSubpassDependency>& dependencies = {}) noexcept;
+            void destroy() noexcept;
 
             // accessor
             VkRenderPass get() const noexcept { return m_vkRenderPass; }

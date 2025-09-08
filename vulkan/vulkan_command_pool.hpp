@@ -35,8 +35,8 @@ namespace keplar
             // command buffer allocation
             std::optional<VulkanCommandBuffer> allocateBuffer(VkCommandBufferLevel level) const noexcept;
             std::vector<VulkanCommandBuffer> allocateBuffers(uint32_t count, VkCommandBufferLevel level) const noexcept;
-            void freeBuffers(const std::vector<VulkanCommandBuffer>& commandBuffers) const noexcept;
-            void freeBuffer(const VulkanCommandBuffer& commandBuffer) const noexcept;
+            void releaseBuffers(const std::vector<VulkanCommandBuffer>& commandBuffers) const noexcept;
+            void releaseBuffer(const VulkanCommandBuffer& commandBuffer) const noexcept;
 
             // accessors
             VkCommandPool get() const noexcept { return m_vkCommandPool; }

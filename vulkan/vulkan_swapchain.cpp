@@ -28,17 +28,7 @@ namespace keplar
 
     VulkanSwapchain::~VulkanSwapchain()
     {
-        // destror color and depth-stencil resources
-        destroyAttachments();
-
-        if (m_vkSwapchainKHR != VK_NULL_HANDLE)
-        {
-            // swapchain images are destroyed when swapchain is destroyed
-            vkDestroySwapchainKHR(m_vkDevice, m_vkSwapchainKHR, nullptr);
-            m_vkSwapchainKHR = VK_NULL_HANDLE;
-            m_vkDevice = VK_NULL_HANDLE;
-            VK_LOG_INFO("swapchain destroyed successfully");
-        }
+        destroy();
     }
 
     bool VulkanSwapchain::initialize(uint32_t width, uint32_t height) noexcept
@@ -60,16 +50,44 @@ namespace keplar
         chooseSwapExtent(surfaceCapabilities, { width, height });
         choosePreTransform(surfaceCapabilities);
 
-        // free previous swapchain images/views
-        destroyAttachments();
-
-        // create swapchain and its attachments (destroy old internally)
+        // create swapchain and its attachments
         if (!createSwapchain(m_vkSwapchainKHR))     { return false; }
         if (!createColorAttachment())               { return false; }
         if (!createDepthAttachment())               { return false; }
 
-        VK_LOG_INFO("initialize :: swapchain created successfully.");
+        VK_LOG_DEBUG("initialize :: swapchain created successfully.");
         return true;
+    }
+
+    bool VulkanSwapchain::recreate(uint32_t width, uint32_t height) noexcept
+    {
+        // teardown previous swapchain images/views
+        destroyAttachments();
+
+        // initialize swapchain & attachments (old swapchain destroyed internally)
+        if (!initialize(width, height))               
+        { 
+            VK_LOG_FATAL("recreate :: swapchain re-creation failed.");
+            return false; 
+        }
+
+        VK_LOG_DEBUG("recreate :: swapchain created successfully.");
+        return true;
+    }
+
+    void VulkanSwapchain::destroy() noexcept
+    {
+        // destror color and depth-stencil resources
+        destroyAttachments();
+
+        if (m_vkSwapchainKHR != VK_NULL_HANDLE)
+        {
+            // swapchain images are destroyed when swapchain is destroyed
+            vkDestroySwapchainKHR(m_vkDevice, m_vkSwapchainKHR, nullptr);
+            m_vkSwapchainKHR = VK_NULL_HANDLE;
+            m_vkDevice = VK_NULL_HANDLE;
+            VK_LOG_DEBUG("swapchain destroyed successfully");
+        }
     }
 
     bool VulkanSwapchain::chooseSurfaceFormat() noexcept
@@ -194,7 +212,7 @@ namespace keplar
         vkSwapchainCreateInfoKHR.oldSwapchain = oldSwapchain;
 
         // log swapchain creation info
-        VK_LOG_INFO("swapchain creation info :: image count: %d, extent: %d x %d", m_imageCount, m_imageExtent.width, m_imageExtent.height);
+        VK_LOG_DEBUG("swapchain creation info :: image count: %d, extent: %d x %d", m_imageCount, m_imageExtent.width, m_imageExtent.height);
 
         // configure sharing mode:
         QueueFamilyIndices indices = m_device.getQueueFamilyIndices();
@@ -204,14 +222,14 @@ namespace keplar
             vkSwapchainCreateInfoKHR.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
             vkSwapchainCreateInfoKHR.queueFamilyIndexCount = 2;
             vkSwapchainCreateInfoKHR.pQueueFamilyIndices = queueFamilyIndices;
-            VK_LOG_INFO("swapchain creation info :: image sharing mode is VK_SHARING_MODE_CONCURRENT");
+            VK_LOG_DEBUG("swapchain creation info :: image sharing mode is VK_SHARING_MODE_CONCURRENT");
         }
         else 
         {
             vkSwapchainCreateInfoKHR.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
             vkSwapchainCreateInfoKHR.queueFamilyIndexCount = 0;
             vkSwapchainCreateInfoKHR.pQueueFamilyIndices = nullptr;
-            VK_LOG_INFO("swapchain creation info :: image sharing mode is VK_SHARING_MODE_EXCLUSIVE");
+            VK_LOG_DEBUG("swapchain creation info :: image sharing mode is VK_SHARING_MODE_EXCLUSIVE");
         }
 
         // create swapchain 
@@ -227,11 +245,11 @@ namespace keplar
         if (oldSwapchain != VK_NULL_HANDLE)
         {
             vkDestroySwapchainKHR(m_vkDevice, oldSwapchain, nullptr);
-            VK_LOG_INFO("old swapchain destroyed successfully");
+            VK_LOG_DEBUG("old swapchain destroyed successfully");
         }
 
         m_vkSwapchainKHR = swapchain;
-        VK_LOG_INFO("swapchain created successfully");
+        VK_LOG_DEBUG("swapchain created successfully");
         return true;
     }
 
@@ -299,7 +317,7 @@ namespace keplar
 
         // update swapchain image count
         m_imageCount = swapchainImageCount;
-        VK_LOG_INFO("swapchain color image views are created successfully : %d", m_imageCount);
+        VK_LOG_DEBUG("swapchain color image views are created successfully : %d", m_imageCount);
         return true;
     }
 
@@ -431,7 +449,7 @@ namespace keplar
             return false;
         }
 
-        VK_LOG_INFO("swapchain depth image and view are created successfully");
+        VK_LOG_DEBUG("swapchain depth image and view are created successfully");
         return true;
     }
 

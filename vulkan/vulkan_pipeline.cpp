@@ -17,23 +17,7 @@ namespace keplar
 
     VulkanPipeline::~VulkanPipeline()
     {
-        if (m_vkPipeline != VK_NULL_HANDLE)
-        {
-            vkDestroyPipeline(m_vkDevice, m_vkPipeline, nullptr);
-            m_vkPipeline = VK_NULL_HANDLE;
-        }
-
-        if (m_vkPipelineCache != VK_NULL_HANDLE)
-        {
-            vkDestroyPipelineCache(m_vkDevice, m_vkPipelineCache, nullptr);
-            m_vkPipelineCache = VK_NULL_HANDLE;
-        }
-
-        if (m_vkPipelineLayout != VK_NULL_HANDLE)
-        {
-            vkDestroyPipelineLayout(m_vkDevice, m_vkPipelineLayout, nullptr);
-            m_vkPipelineLayout = VK_NULL_HANDLE;
-        }
+        destroy();
     }
 
     VulkanPipeline::VulkanPipeline(VulkanPipeline&& other) noexcept
@@ -54,20 +38,7 @@ namespace keplar
         if (this != &other)
         {
             // release current resources
-            if (m_vkPipeline != VK_NULL_HANDLE)
-            {
-                vkDestroyPipeline(m_vkDevice, m_vkPipeline, nullptr);
-            }
-
-            if (m_vkPipelineCache != VK_NULL_HANDLE)
-            {
-                vkDestroyPipelineCache(m_vkDevice, m_vkPipelineCache, nullptr);
-            }
-
-            if (m_vkPipelineLayout != VK_NULL_HANDLE)
-            {
-                vkDestroyPipelineLayout(m_vkDevice, m_vkPipelineLayout, nullptr);
-            }
+            destroy();
 
             // transfer ownership
             m_vkDevice = other.m_vkDevice;
@@ -159,8 +130,32 @@ namespace keplar
             return false;
         }
 
-        VK_LOG_INFO("graphics pipeline created successfully");
+        VK_LOG_DEBUG("graphics pipeline created successfully");
         m_vkDevice = vkDevice;
         return true;
+    }
+
+    void VulkanPipeline::destroy() noexcept
+    {
+        if (m_vkPipeline != VK_NULL_HANDLE)
+        {
+            vkDestroyPipeline(m_vkDevice, m_vkPipeline, nullptr);
+            m_vkPipeline = VK_NULL_HANDLE;
+            VK_LOG_DEBUG("graphics pipeline destroyed successfully");
+        }
+
+        if (m_vkPipelineCache != VK_NULL_HANDLE)
+        {
+            vkDestroyPipelineCache(m_vkDevice, m_vkPipelineCache, nullptr);
+            m_vkPipelineCache = VK_NULL_HANDLE;
+            VK_LOG_DEBUG("pipeline cache destroyed successfully");
+        }
+
+        if (m_vkPipelineLayout != VK_NULL_HANDLE)
+        {
+            vkDestroyPipelineLayout(m_vkDevice, m_vkPipelineLayout, nullptr);
+            m_vkPipelineLayout = VK_NULL_HANDLE;
+            VK_LOG_DEBUG("pipeline layout destroyed successfully");
+        }
     }
 }   // namespace keplar

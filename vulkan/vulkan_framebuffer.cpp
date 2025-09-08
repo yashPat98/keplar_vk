@@ -15,14 +15,7 @@ namespace keplar
 
     VulkanFramebuffer::~VulkanFramebuffer()
     {
-        // destroy framebuffer
-        if (m_vkFramebuffer != VK_NULL_HANDLE)
-        {
-            vkDestroyFramebuffer(m_vkDevice, m_vkFramebuffer, nullptr);
-            m_vkFramebuffer = VK_NULL_HANDLE;
-            m_vkDevice = VK_NULL_HANDLE;
-            VK_LOG_INFO("vulkan framebuffer destroyed successfully");
-        }
+        destroy();
     }
 
     VulkanFramebuffer::VulkanFramebuffer(VulkanFramebuffer&& other) noexcept
@@ -39,10 +32,7 @@ namespace keplar
         if (this != &other)
         {
             // release current resources
-            if (m_vkFramebuffer != VK_NULL_HANDLE)
-            {
-                vkDestroyFramebuffer(m_vkDevice, m_vkFramebuffer, nullptr);
-            }
+            destroy();
 
             // transfer ownership
             m_vkDevice = other.m_vkDevice;
@@ -76,7 +66,19 @@ namespace keplar
         // store device handle for destruction
         m_vkDevice = vkDevice;
         m_framebufferExtent = { createInfo.width, createInfo.height };
-        VK_LOG_INFO("vulkan framebuffer created successfully");
+        VK_LOG_DEBUG("vulkan framebuffer created successfully");
         return true;
+    }
+
+    void VulkanFramebuffer::destroy() noexcept
+    {
+        // destroy framebuffer
+        if (m_vkFramebuffer != VK_NULL_HANDLE)
+        {
+            vkDestroyFramebuffer(m_vkDevice, m_vkFramebuffer, nullptr);
+            m_vkFramebuffer = VK_NULL_HANDLE;
+            m_vkDevice = VK_NULL_HANDLE;
+            VK_LOG_DEBUG("vulkan framebuffer destroyed successfully");
+        }
     }
 }   // namespace keplar

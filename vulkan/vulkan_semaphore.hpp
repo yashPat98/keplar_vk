@@ -25,6 +25,7 @@ namespace keplar
 
             // usage
             bool initialize(VkDevice vkDevice, const VkSemaphoreCreateInfo& createInfo) noexcept;
+            void destroy() noexcept;
 
             // accessor
             VkSemaphore get() const noexcept { return m_vkSemaphore; }

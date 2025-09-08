@@ -21,7 +21,7 @@ namespace keplar
             vkDestroyDescriptorPool(m_vkDevice, m_vkDescriptorPool, nullptr);
             m_vkDescriptorPool = VK_NULL_HANDLE;
             m_vkDevice = VK_NULL_HANDLE;
-            VK_LOG_INFO("descriptor pool destroyed successfully");
+            VK_LOG_DEBUG("descriptor pool destroyed successfully");
         }
     }
 

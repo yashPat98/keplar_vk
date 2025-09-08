@@ -24,6 +24,7 @@ namespace keplar
             VulkanFramebuffer& operator=(VulkanFramebuffer&&) noexcept;
 
             bool initialize(VkDevice vkDevice, const VkFramebufferCreateInfo& createInfo) noexcept;
+            void destroy() noexcept;
 
             // accessors
             VkFramebuffer get() const noexcept { return m_vkFramebuffer; }

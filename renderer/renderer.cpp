@@ -46,7 +46,7 @@ namespace keplar
         vkDeviceWaitIdle(m_vkDevice);
 
         // destroy vulkan resources 
-        m_commandPool.freeBuffers(m_commandBuffers);
+        m_commandPool.releaseBuffers(m_commandBuffers);
         m_commandBuffers.clear();
     }
 
@@ -71,7 +71,7 @@ namespace keplar
         // initialization complete
         m_readyToRender.store(true);
 
-        VK_LOG_DEBUG("Renderer::initialize successful");
+        VK_LOG_INFO("Renderer::initialize successful");
         return true;
     }
 
@@ -80,7 +80,7 @@ namespace keplar
         // 1️⃣ ensure initialization is completed before rendering 
         if (!m_readyToRender.load())
         {
-            VK_LOG_WARN("Renderer::renderFrame : initialization is not complete");
+            VK_LOG_DEBUG("Renderer::renderFrame : initialization is not complete");
             return false;
         }
 
@@ -149,7 +149,88 @@ namespace keplar
         return true;
     }
 
-     bool Renderer::createSwapchain()
+    void Renderer::onWindowResize(uint32_t width, uint32_t height)
+    {    
+        // window minimized: stop rendering
+        if (width == 0 || height == 0)
+        {
+            m_readyToRender.store(false);
+            return;
+        }
+        
+        // window restored, dimensions haven't changed: resume rendering
+        if (width == m_windowWidth && height == m_windowHeight) 
+        {
+            m_readyToRender.store(true);
+            return;
+        }
+
+        // stop rendering and wait for device to finish all operations
+        m_readyToRender.store(false);
+        vkDeviceWaitIdle(m_vkDevice);
+
+        // recreate swapchain with new dimensions
+        if (!m_vulkanSwapchain.recreate(width, height))
+        {
+            return;
+        }
+
+        // store old max frames-in-flight for sync check
+        const uint32_t previousMaxFramesInFlight = m_maxFramesInFlight;
+
+        // update swapchain handle and image count
+        m_vkSwapchainKHR      = m_vulkanSwapchain.get();
+        m_swapchainImageCount = m_vulkanSwapchain.getImageCount();
+        m_maxFramesInFlight   = glm::min(3u, m_swapchainImageCount);
+
+        // teardown all dependent resources (framebuffers, pipeline, renderpass, command buffers)
+        for (auto& framebuffer : m_framebuffers)
+        {
+            framebuffer.destroy();
+        }
+        m_graphicsPipeline.destroy();
+        m_renderPass.destroy();
+        m_commandPool.releaseBuffers(m_commandBuffers);
+        m_commandBuffers.clear();
+
+        // recreate all dependent resources
+        if (!createCommandBuffers())    { return; }
+        if (!createRenderPasses())      { return; }
+        if (!createGraphicsPipeline())  { return; }
+        if (!createFramebuffers())      { return; }
+        if (!buildCommandBuffers())     { return; }
+
+        // recreate per-frame sync primitives if max frames-in-flight changed
+        if (m_maxFramesInFlight != previousMaxFramesInFlight)
+        {
+            for (uint32_t i = 0; i < m_maxFramesInFlight; ++i)
+            {
+                auto& frameSync = m_frameSyncPrimitives[i];
+                frameSync.mInFlightFence.destroy();
+                frameSync.mRenderCompleteSemaphore.destroy();
+                frameSync.mImageAvailableSemaphore.destroy();
+            }
+
+            if (!createSyncPrimitives())    
+            { 
+                return; 
+            }
+        }
+
+        // update window dimensions
+        m_windowWidth  = width;
+        m_windowHeight = height;
+
+        // update projection matrix with new aspect ratio
+        const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
+        m_projectionMatrix = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
+        m_projectionMatrix[1][1] *= -1.0f;
+
+        // resume rendering
+        m_readyToRender.store(true);
+    }
+
+    bool Renderer::createSwapchain()
     {
         // setup swapchain
         if (!m_vulkanSwapchain.initialize(m_windowWidth, m_windowHeight))

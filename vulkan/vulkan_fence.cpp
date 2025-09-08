@@ -16,14 +16,7 @@ namespace keplar
 
     VulkanFence::~VulkanFence()
     {
-        // destroy vulkan fence
-        if (m_vkFence != VK_NULL_HANDLE)
-        {
-            vkDestroyFence(m_vkDevice, m_vkFence, nullptr);
-            m_vkFence = VK_NULL_HANDLE;
-            m_vkDevice = VK_NULL_HANDLE;
-            VK_LOG_INFO("fence object destroyed successfully");
-        }
+        destroy();
     }
 
     VulkanFence::VulkanFence(VulkanFence&& other) noexcept
@@ -40,10 +33,7 @@ namespace keplar
         if (this != &other)
         {
             // release current resources
-            if (m_vkFence != VK_NULL_HANDLE)
-            {
-                vkDestroyFence(m_vkDevice, m_vkFence, nullptr);
-            }
+            destroy();
 
             // transfer ownership
             m_vkDevice = other.m_vkDevice;
@@ -76,9 +66,21 @@ namespace keplar
 
         // store device handle for destruction
         m_vkDevice = vkDevice;
-        VK_LOG_INFO("fence object created successfully");
+        VK_LOG_DEBUG("fence object created successfully");
         return true;
 
+    }
+
+    void VulkanFence::destroy()
+    {
+        // destroy vulkan fence
+        if (m_vkFence != VK_NULL_HANDLE)
+        {
+            vkDestroyFence(m_vkDevice, m_vkFence, nullptr);
+            m_vkFence = VK_NULL_HANDLE;
+            m_vkDevice = VK_NULL_HANDLE;
+            VK_LOG_DEBUG("fence object destroyed successfully");
+        }
     }
 
     bool VulkanFence::wait(uint64_t timeout) const noexcept

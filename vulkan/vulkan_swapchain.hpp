@@ -27,6 +27,8 @@ namespace keplar
             VulkanSwapchain& operator=(VulkanSwapchain&&) = delete;
 
             bool initialize(uint32_t width, uint32_t height) noexcept;
+            bool recreate(uint32_t width, uint32_t height) noexcept;
+            void destroy() noexcept;
 
             // accessors
             VkSwapchainKHR                  get() const noexcept                   { return m_vkSwapchainKHR; }

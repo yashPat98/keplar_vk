@@ -15,14 +15,7 @@ namespace keplar
 
     VulkanRenderPass::~VulkanRenderPass()
     {
-        // destroy render pass
-        if (m_vkRenderPass != VK_NULL_HANDLE)
-        {
-            vkDestroyRenderPass(m_vkDevice, m_vkRenderPass, nullptr);
-            m_vkDevice = VK_NULL_HANDLE;
-            m_vkRenderPass = VK_NULL_HANDLE;
-            VK_LOG_INFO("vulkan render pass destroyed successfully");
-        }
+        destroy();
     }
 
     VulkanRenderPass::VulkanRenderPass(VulkanRenderPass&& other) noexcept
@@ -39,10 +32,7 @@ namespace keplar
         if (this != &other)
         {
             // release current resources
-            if (m_vkRenderPass != VK_NULL_HANDLE)
-            {
-                vkDestroyRenderPass(m_vkDevice, m_vkRenderPass, nullptr);
-            }
+            destroy();
 
             // transfer ownership
             m_vkDevice = other.m_vkDevice;
@@ -97,7 +87,19 @@ namespace keplar
 
         // store device handle for destruction
         m_vkDevice = vkDevice;
-        VK_LOG_INFO("vulkan render pass created successfully");
+        VK_LOG_DEBUG("vulkan render pass created successfully");
         return true;
+    }
+
+    void VulkanRenderPass::destroy() noexcept
+    {
+        // destroy render pass
+        if (m_vkRenderPass != VK_NULL_HANDLE)
+        {
+            vkDestroyRenderPass(m_vkDevice, m_vkRenderPass, nullptr);
+            m_vkDevice = VK_NULL_HANDLE;
+            m_vkRenderPass = VK_NULL_HANDLE;
+            VK_LOG_DEBUG("vulkan render pass destroyed successfully");
+        }
     }
 }   // namespace keplar

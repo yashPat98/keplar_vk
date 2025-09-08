@@ -25,7 +25,7 @@ namespace keplar
             vkDestroyShaderModule(m_vkDevice, m_vkShaderModule, nullptr);
             m_vkShaderModule = VK_NULL_HANDLE;
             m_vkDevice = VK_NULL_HANDLE;
-            VK_LOG_INFO("shader module destroyed successfully");
+            VK_LOG_DEBUG("shader module destroyed successfully");
         }
     }
 
@@ -111,7 +111,7 @@ namespace keplar
 
         // store device handle for destruction
         m_vkDevice = vkDevice;
-        VK_LOG_INFO("shader module initialized successfully using SPIR-V file: '%s'.", spirvFile.c_str());
+        VK_LOG_DEBUG("shader module initialized successfully using SPIR-V file: '%s'.", spirvFile.c_str());
         return true;
     }
 

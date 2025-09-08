@@ -22,7 +22,7 @@ namespace keplar
         if (m_mappedData)
         {
             vkUnmapMemory(m_vkDevice, m_vkDeviceMemory);
-            VK_LOG_INFO("vulkan memory unmapped successfully");
+            VK_LOG_DEBUG("vulkan memory unmapped successfully");
             m_mappedData = nullptr;
         }
 
@@ -30,7 +30,7 @@ namespace keplar
         {
             vkFreeMemory(m_vkDevice, m_vkDeviceMemory, nullptr);
             m_vkDeviceMemory = VK_NULL_HANDLE;
-            VK_LOG_INFO("vulkan buffer memory freed successfully");
+            VK_LOG_DEBUG("vulkan buffer memory freed successfully");
         }
 
         if (m_vkBuffer != VK_NULL_HANDLE)
@@ -38,7 +38,7 @@ namespace keplar
             vkDestroyBuffer(m_vkDevice, m_vkBuffer, nullptr);
             m_vkBuffer = VK_NULL_HANDLE;
             m_vkDevice = VK_NULL_HANDLE;
-            VK_LOG_INFO("vulkan buffer destroyed successfully");
+            VK_LOG_DEBUG("vulkan buffer destroyed successfully");
         }
     }
 
@@ -266,7 +266,7 @@ namespace keplar
 
         // cleanup staging resources 
         copyFence.wait();
-        commandPool.freeBuffer(commandBuffer);
+        commandPool.releaseBuffer(commandBuffer);
         vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
         vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
 

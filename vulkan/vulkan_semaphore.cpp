@@ -15,14 +15,7 @@ namespace keplar
 
     VulkanSemaphore::~VulkanSemaphore()
     {
-        // destroy semaphore
-        if (m_vkSemaphore != VK_NULL_HANDLE)
-        {
-            vkDestroySemaphore(m_vkDevice, m_vkSemaphore, nullptr);
-            m_vkSemaphore = VK_NULL_HANDLE;
-            m_vkDevice = VK_NULL_HANDLE;
-            VK_LOG_INFO("semaphore object destroyed successfully");
-        }
+        destroy();
     }
 
     VulkanSemaphore::VulkanSemaphore(VulkanSemaphore&& other) noexcept
@@ -39,10 +32,7 @@ namespace keplar
         if (this != &other)
         {
             // release current resources
-            if (m_vkSemaphore != VK_NULL_HANDLE)
-            {
-                vkDestroySemaphore(m_vkDevice, m_vkSemaphore, nullptr);
-            }
+            destroy();
 
             // transfer ownership
             m_vkDevice = other.m_vkDevice;
@@ -75,7 +65,19 @@ namespace keplar
 
         // store device handle for destruction
         m_vkDevice = vkDevice;
-        VK_LOG_INFO("semaphore object created successfully");
+        VK_LOG_DEBUG("semaphore object created successfully");
         return true;
+    }
+
+    void VulkanSemaphore::destroy() noexcept
+    {
+        // destroy semaphore
+        if (m_vkSemaphore != VK_NULL_HANDLE)
+        {
+            vkDestroySemaphore(m_vkDevice, m_vkSemaphore, nullptr);
+            m_vkSemaphore = VK_NULL_HANDLE;
+            m_vkDevice = VK_NULL_HANDLE;
+            VK_LOG_DEBUG("semaphore object destroyed successfully");
+        }
     }
 }   // namespace keplar

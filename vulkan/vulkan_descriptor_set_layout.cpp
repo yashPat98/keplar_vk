@@ -21,7 +21,7 @@ namespace keplar
             vkDestroyDescriptorSetLayout(m_vkDevice, m_vkDescriptorSetLayout, nullptr);
             m_vkDescriptorSetLayout = VK_NULL_HANDLE;
             m_vkDevice = VK_NULL_HANDLE;
-            VK_LOG_INFO("descriptor set layout destroyed successfully");
+            VK_LOG_DEBUG("descriptor set layout destroyed successfully");
         }
     }
 

@@ -51,7 +51,8 @@ namespace keplar
             VulkanPipeline& operator=(VulkanPipeline&&) noexcept;
 
             bool initialize(VkDevice vkDevice, const GraphicsPipelineConfig& pipelineConfig) noexcept;
-            
+            void destroy() noexcept;
+
             // accessor
             VkPipeline get() const noexcept { return m_vkPipeline; }
             VkPipelineLayout getLayout() const noexcept { return m_vkPipelineLayout; }
