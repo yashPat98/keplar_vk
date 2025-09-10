@@ -23,6 +23,7 @@
 #include "vulkan/vulkan_descriptor_pool.hpp"
 #include "vulkan/vulkan_pipeline.hpp"
 #include "shader_structs.hpp"
+#include "camera.hpp"
 
 namespace keplar
 {
@@ -42,9 +43,13 @@ namespace keplar
             // initialize vulkan resources and submit frames for rendering
             bool initialize() noexcept;
             bool renderFrame() noexcept;
+            void update(float dt) noexcept;
 
             // handle window and user input events
             virtual void onWindowResize(uint32_t, uint32_t) override;
+
+            // accessors
+            std::shared_ptr<Camera> getCamera() const noexcept { return m_camera; }
 
         private:
             bool createSwapchain();
@@ -122,7 +127,7 @@ namespace keplar
             std::vector<VkDescriptorSet>        m_descriptorSets;
             std::vector<ubo::FrameData>         m_uboFrameData;
             
-            // initial uniform data
-            glm::mat4                           m_projectionMatrix;
+            // main camera
+            std::shared_ptr<Camera>             m_camera;
     };
 }   // namespace keplar

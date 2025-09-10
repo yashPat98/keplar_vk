@@ -25,13 +25,9 @@ namespace keplar
         , m_currentFrameIndex(0)
         , m_readyToRender(false)
     {
-        // calculate aspect ratio of window
+        // calculate aspect ratio of window and initialize camera
         const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
-
-        // initialize projection matrix and flip y-axis to match vulkan NDC coordinate system
-        m_projectionMatrix = glm::mat4(1.0f);
-        m_projectionMatrix = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
-        m_projectionMatrix[1][1] *= -1.0f;
+        m_camera = std::make_shared<Camera>(45.0f, aspectRatio, 0.1f, 100.0f);
     }
 
     Renderer::~Renderer()
@@ -149,6 +145,12 @@ namespace keplar
         return true;
     }
 
+    void Renderer::update(float dt) noexcept
+    {
+        // update camera 
+        m_camera->update(dt);
+    }
+
     void Renderer::onWindowResize(uint32_t width, uint32_t height)
     {    
         // window minimized: stop rendering
@@ -217,14 +219,9 @@ namespace keplar
             }
         }
 
-        // update window dimensions
+        // update window dimensions 
         m_windowWidth  = width;
         m_windowHeight = height;
-
-        // update projection matrix with new aspect ratio
-        const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
-        m_projectionMatrix = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
-        m_projectionMatrix[1][1] *= -1.0f;
 
         // resume rendering
         m_readyToRender.store(true);
@@ -849,8 +846,8 @@ namespace keplar
         // update matrices for the current frame
         ubo::FrameData& frameData = m_uboFrameData[m_currentImageIndex];
         frameData.model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
-        frameData.view = glm::mat4(1.0f);
-        frameData.projection = m_projectionMatrix;
+        frameData.view = m_camera->getViewMatrix();
+        frameData.projection = m_camera->getProjectionMatrix();
 
         // upload data to the host-visible uniform buffer
         if (!m_uniformBuffers[m_currentImageIndex].uploadHostVisible(&frameData, sizeof(frameData)))

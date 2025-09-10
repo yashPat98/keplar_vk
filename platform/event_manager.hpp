@@ -36,8 +36,8 @@ namespace keplar
             void onKeyReleased(uint32_t key) const noexcept;
 
             // mouse events
-            void onMouseMove(double x, double y) const noexcept;
-            void onMouseScroll(double delta) const noexcept;
+            void onMouseMove(double xpos, double ypos) const noexcept;
+            void onMouseScroll(double yoffset) const noexcept;
             void onMouseButtonPressed(uint32_t button) const noexcept;
             void onMouseButtonReleased(uint32_t button) const noexcept;
 

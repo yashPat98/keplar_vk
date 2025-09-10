@@ -82,21 +82,21 @@ namespace keplar
         }
     }
 
-    void EventManager::onMouseMove(double x, double y) const noexcept
+    void EventManager::onMouseMove(double xpos, double ypos) const noexcept
     {
         auto snapshot = getListenerSnapshot();
         for (auto listener : snapshot)
         {
-            listener->onMouseMove(x, y);
+            listener->onMouseMove(xpos, ypos);
         }
     }
 
-    void EventManager::onMouseScroll(double delta) const noexcept
+    void EventManager::onMouseScroll(double yoffset) const noexcept
     {
         auto snapshot = getListenerSnapshot();
         for (auto listener : snapshot)
         {
-            listener->onMouseScroll(delta);
+            listener->onMouseScroll(yoffset);
         }
     }
 
