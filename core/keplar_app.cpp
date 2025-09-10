@@ -50,9 +50,11 @@ namespace keplar
             float dt = std::chrono::duration<float>(currentTime - lastTime).count();
             lastTime = currentTime;
 
-            // update and submit current frame
-            m_renderer->update(dt);
-            m_renderer->renderFrame();
+            // update and submit current frame for rendering
+            if (!m_renderer->update(dt) || !m_renderer->renderFrame())
+            {
+                return EXIT_FAILURE;
+            }
         }
 
         return EXIT_SUCCESS;

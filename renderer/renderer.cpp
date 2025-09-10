@@ -73,11 +73,11 @@ namespace keplar
 
     bool Renderer::renderFrame() noexcept
     {
-        // 1️⃣ ensure initialization is completed before rendering 
+        // 1️⃣ skip frame if renderer is not ready
         if (!m_readyToRender.load())
         {
-            VK_LOG_DEBUG("Renderer::renderFrame : initialization is not complete");
-            return false;
+            VK_LOG_DEBUG("Renderer::renderFrame skipped: renderer not ready");
+            return true;
         }
 
         // 2️⃣ get sync primitives for current frame
@@ -91,9 +91,16 @@ namespace keplar
         }
 
         // 4️⃣ acquire next image from swapchain, signaling the image available semaphore 
-        if (!VK_CHECK(vkAcquireNextImageKHR(m_vkDevice, m_vkSwapchainKHR, UINT64_MAX, frameSync.mImageAvailableSemaphore.get(), VK_NULL_HANDLE, &m_currentImageIndex)))
+        VkResult vkResult = vkAcquireNextImageKHR(m_vkDevice, m_vkSwapchainKHR, UINT64_MAX, frameSync.mImageAvailableSemaphore.get(), VK_NULL_HANDLE, &m_currentImageIndex);
+        if (vkResult == VK_ERROR_OUT_OF_DATE_KHR || vkResult == VK_SUBOPTIMAL_KHR)
         {
-            // handle swapchain recreation errors
+            VK_LOG_DEBUG("vkAcquireNextImageKHR failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            onWindowResize(m_windowWidth, m_windowHeight);
+            return true;
+        }
+        else if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_FATAL("vkAcquireNextImageKHR failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
             return false;
         }
 
@@ -135,8 +142,16 @@ namespace keplar
         presentInfo.pImageIndices = &m_currentImageIndex;
 
         // 9️⃣ queue the present operation
-        if (!VK_CHECK(vkQueuePresentKHR(m_presentQueue, &presentInfo)))
+        vkResult = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+        if (vkResult == VK_ERROR_OUT_OF_DATE_KHR || vkResult == VK_SUBOPTIMAL_KHR)
         {
+            VK_LOG_DEBUG("vkQueuePresentKHR failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            onWindowResize(m_windowWidth, m_windowHeight);
+            return true;
+        }
+        else if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_FATAL("vkQueuePresentKHR failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
             return false;
         }
 
@@ -145,10 +160,11 @@ namespace keplar
         return true;
     }
 
-    void Renderer::update(float dt) noexcept
+    bool Renderer::update(float dt) noexcept
     {
         // update camera 
         m_camera->update(dt);
+        return true;
     }
 
     void Renderer::onWindowResize(uint32_t width, uint32_t height)
@@ -160,13 +176,6 @@ namespace keplar
             return;
         }
         
-        // window restored, dimensions haven't changed: resume rendering
-        if (width == m_windowWidth && height == m_windowHeight) 
-        {
-            m_readyToRender.store(true);
-            return;
-        }
-
         // stop rendering and wait for device to finish all operations
         m_readyToRender.store(false);
         vkDeviceWaitIdle(m_vkDevice);
@@ -212,11 +221,8 @@ namespace keplar
                 frameSync.mRenderCompleteSemaphore.destroy();
                 frameSync.mImageAvailableSemaphore.destroy();
             }
-
-            if (!createSyncPrimitives())    
-            { 
-                return; 
-            }
+            
+            if (!createSyncPrimitives()) { return; }
         }
 
         // update window dimensions 
