@@ -32,14 +32,15 @@ namespace keplar
             virtual void removeListener(EventListener* listener) noexcept override;
 
             // vulkan 
-            virtual VkSurfaceKHR createVulkanSurface(VkInstance vkInstance) const noexcept override;
-            virtual std::vector<std::string_view> getSurfaceInstanceExtensions() const noexcept override;
+            virtual VkSurfaceKHR createSurface(VkInstance vkInstance) const noexcept override;
+            virtual std::vector<std::string_view> getSurfaceExtensions() const noexcept override;
 
         private:
-            void toggleFullscreen();
+            void toggleFullscreen() noexcept;
             static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
             
         private:
+            // window handles and state
             HINSTANCE           m_hInstance;
             HWND                m_hwnd;
             WINDOWPLACEMENT     m_windowPlacement;

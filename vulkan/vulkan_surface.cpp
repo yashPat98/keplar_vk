@@ -39,8 +39,8 @@ namespace keplar
         // store the VkInstance for resource creation and destruction
         m_vkInstance = instance.get();
 
-        // get presentation surface from platform 
-        m_vkSurfaceKHR = platform.createVulkanSurface(m_vkInstance);
+        // create platform specific presentation surface 
+        m_vkSurfaceKHR = platform.createSurface(m_vkInstance);
         if (m_vkSurfaceKHR == VK_NULL_HANDLE)
         {   
             VK_LOG_FATAL("failed to create presentation surface");
@@ -146,15 +146,5 @@ namespace keplar
         }
 
         return vkSurfaceCapabilitiesKHR;
-    }
-
-    VkSurfaceKHR VulkanSurface::get() const noexcept
-    {
-        return m_vkSurfaceKHR;
-    }
-
-    bool VulkanSurface::isValid() const noexcept
-    {
-        return (m_vkSurfaceKHR != VK_NULL_HANDLE);
     }
 }   // namespace keplar

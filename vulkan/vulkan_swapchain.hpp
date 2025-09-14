@@ -32,16 +32,17 @@ namespace keplar
 
             // accessors
             VkSwapchainKHR                  get() const noexcept                   { return m_vkSwapchainKHR; }
+            
             const std::vector<VkImage>&     getColorImages() const noexcept        { return m_colorImages; }
             const std::vector<VkImageView>& getColorImageViews() const noexcept    { return m_colorImageViews; }
             VkImage                         getDepthImage() const noexcept         { return m_depthImage; }
             VkImageView                     getDepthImageView() const noexcept     { return m_depthImageView; }
+            uint32_t                        getImageCount() const noexcept         { return m_imageCount; }
+            VkExtent2D                      getExtent() const noexcept             { return m_imageExtent; }
             VkFormat                        getColorFormat() const noexcept        { return m_vkSurfaceFormatKHR.format; }
             VkFormat                        getDepthFormat() const noexcept        { return m_depthFormat; }
             VkColorSpaceKHR                 getColorSpace() const noexcept         { return m_vkSurfaceFormatKHR.colorSpace; }
             VkPresentModeKHR                getPresentMode() const noexcept        { return m_vkPresentModeKHR; }
-            VkExtent2D                      getExtent() const noexcept             { return m_imageExtent; }
-            uint32_t                        getImageCount() const noexcept         { return m_imageCount; }
 
         private:
             // initialization helpers
@@ -57,27 +58,28 @@ namespace keplar
 
         private:
             // dependencies
-            const VulkanDevice& m_device;
+            const VulkanDevice&  m_device;
             const VulkanSurface& m_surface;
 
             // vulkan handles
-            VkDevice m_vkDevice;
-            VkSwapchainKHR m_vkSwapchainKHR;
+            VkDevice        m_vkDevice;
+            VkSwapchainKHR  m_vkSwapchainKHR;
 
             // swapchain properties
-            VkSurfaceFormatKHR m_vkSurfaceFormatKHR;
-            VkPresentModeKHR m_vkPresentModeKHR;
-            uint32_t m_imageCount;
-            VkExtent2D m_imageExtent;
+            VkSurfaceFormatKHR            m_vkSurfaceFormatKHR;
+            VkPresentModeKHR              m_vkPresentModeKHR;
+            uint32_t                      m_imageCount;
+            VkExtent2D                    m_imageExtent;
             VkSurfaceTransformFlagBitsKHR m_preTransform;
 
-            // swapchain resources
-            std::vector<VkImage> m_colorImages;
-            std::vector<VkImageView> m_colorImageViews;
+            // color attachments
+            std::vector<VkImage>        m_colorImages;
+            std::vector<VkImageView>    m_colorImageViews;
 
-            VkImage m_depthImage;
-            VkDeviceMemory m_depthDeviceMemory;
-            VkImageView m_depthImageView;
-            VkFormat m_depthFormat;
+            // depth attachments
+            VkImage                     m_depthImage;
+            VkDeviceMemory              m_depthMemory;
+            VkImageView                 m_depthImageView;
+            VkFormat                    m_depthFormat;
     };
 }   // namespace keplar

@@ -19,6 +19,7 @@ namespace keplar
         , m_vkSwapchainKHR(VK_NULL_HANDLE)
         , m_windowWidth(winWidth)
         , m_windowHeight(winHeight)
+        , m_sampleCount(VK_SAMPLE_COUNT_1_BIT)
         , m_swapchainImageCount(0)
         , m_maxFramesInFlight(0)
         , m_currentImageIndex(0)
@@ -50,6 +51,7 @@ namespace keplar
     {
         // initialize vulkan resources
         if (!createSwapchain())             { return false; }
+        if (!createMsaaTarget())            { return false; }
         if (!createCommandPool())           { return false; }
         if (!createCommandBuffers())        { return false; }
         if (!createVertexBuffers())         { return false; }
@@ -201,10 +203,12 @@ namespace keplar
         }
         m_graphicsPipeline.destroy();
         m_renderPass.destroy();
+        m_msaaTarget.destroy();
         m_commandPool.releaseBuffers(m_commandBuffers);
         m_commandBuffers.clear();
 
         // recreate all dependent resources
+        if (!createMsaaTarget())        { return; }
         if (!createCommandBuffers())    { return; }
         if (!createRenderPasses())      { return; }
         if (!createGraphicsPipeline())  { return; }
@@ -233,7 +237,7 @@ namespace keplar
         m_readyToRender.store(true);
     }
 
-    bool Renderer::createSwapchain()
+    bool Renderer::createSwapchain() noexcept
     {
         // setup swapchain
         if (!m_vulkanSwapchain.initialize(m_windowWidth, m_windowHeight))
@@ -254,7 +258,25 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::createCommandPool()
+    bool Renderer::createMsaaTarget() noexcept
+    {
+        // initialize msaa color and depth targets for the current swapchain
+        if (m_msaaTarget.initialize(m_vulkanDevice, m_vulkanSwapchain, VK_SAMPLE_COUNT_8_BIT))
+        {
+            // success
+            m_sampleCount = m_msaaTarget.getSampleCount();
+            VK_LOG_DEBUG("Renderer::createMsaaTarget : msaa targets created successfully.");
+        }
+        else 
+        {
+            // fall back to no msaa
+            VK_LOG_WARN("Renderer::createMsaaTarget : failed to create msaa color and depth targets.");
+        }
+
+        return true;
+    }
+
+    bool Renderer::createCommandPool() noexcept
     {
         // setup command pool for graphics queue
         const auto graphicsFamilyIndex = m_vulkanDevice.getQueueFamilyIndices().mGraphicsFamily;
@@ -277,7 +299,7 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::createCommandBuffers()
+    bool Renderer::createCommandBuffers() noexcept
     {
         // allocate primary command buffers per swapchain
         m_commandBuffers = m_commandPool.allocateBuffers(m_swapchainImageCount, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
@@ -291,7 +313,7 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::createVertexBuffers()
+    bool Renderer::createVertexBuffers() noexcept
     {
         // define triangle vertex positions
         float triangle_position[] = 
@@ -340,7 +362,7 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::createUniformBuffers()
+    bool Renderer::createUniformBuffers() noexcept
     {
         // allocate space for vectors per swapchain image
         m_uniformBuffers.resize(m_swapchainImageCount);
@@ -371,7 +393,7 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::createShaderModules()
+    bool Renderer::createShaderModules() noexcept
     {
         // create vertex shader module from SPIR-V
         if (!m_vertexShader.initialize(m_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, "passthrough.vert.spv"))
@@ -391,7 +413,7 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::createDescriptorSetLayouts()
+    bool Renderer::createDescriptorSetLayouts() noexcept
     {
         // binding: 0, type: uniform buffer
         VkDescriptorSetLayoutBinding binding{};
@@ -420,7 +442,7 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::createDescriptorPool()
+    bool Renderer::createDescriptorPool() noexcept
     {
         // descriptor pool size info
         VkDescriptorPoolSize descriptorPoolSize{};
@@ -447,7 +469,7 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::createDescriptorSets()
+    bool Renderer::createDescriptorSets() noexcept
     {
         // create identical descriptor set layouts for each swapchain image
         std::vector<VkDescriptorSetLayout> layouts(m_swapchainImageCount, m_descriptorSetLayout.get());
@@ -499,60 +521,98 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::createRenderPasses()
+    bool Renderer::createRenderPasses() noexcept
     {
-        // color attachment description
+        // check if msaa is enabled
+        const bool msaaEnabled = m_sampleCount > VK_SAMPLE_COUNT_1_BIT;
+
+        // color attachment: description, reference, subpass dependency
         VkAttachmentDescription colorAttachment{};
-        colorAttachment.flags = 0;
-        colorAttachment.format = m_vulkanSwapchain.getColorFormat();
-        colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;                    
-        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;              
-        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;             
-        colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;    
-        colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;  
-        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;          
-        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;      
+        colorAttachment.flags            = 0;
+        colorAttachment.format           = m_vulkanSwapchain.getColorFormat();
+        colorAttachment.samples          = m_sampleCount;
+        colorAttachment.loadOp           = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachment.storeOp          = msaaEnabled ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE;
+        colorAttachment.stencilLoadOp    = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colorAttachment.stencilStoreOp   = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorAttachment.initialLayout    = VK_IMAGE_LAYOUT_UNDEFINED;
+        colorAttachment.finalLayout      = msaaEnabled ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-        // depth attachment description
-        VkAttachmentDescription depthAttachment{};
-        depthAttachment.flags = 0;
-        depthAttachment.format = m_vulkanSwapchain.getDepthFormat();
-        depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;                   
-        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;            
-        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;             
-        depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;   
-        depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;  
-        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;         
-        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;      
-
-        // color attachment references
         VkAttachmentReference colorAttachmentRef{};
-        colorAttachmentRef.attachment = 0;                                       
-        colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;    
+        colorAttachmentRef.attachment    = 0;                                       
+        colorAttachmentRef.layout        = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;   
 
-        // depth attachment references
+        VkSubpassDependency colorDependency{};
+        colorDependency.srcSubpass       = VK_SUBPASS_EXTERNAL;
+        colorDependency.dstSubpass       = 0;
+        colorDependency.srcStageMask     = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        colorDependency.dstStageMask     = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        colorDependency.srcAccessMask    = 0;
+        colorDependency.dstAccessMask    = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+        colorDependency.dependencyFlags  = 0;
+
+        // depth attachment: description, reference, subpass dependency
+        VkAttachmentDescription depthAttachment{};
+        depthAttachment.flags            = 0;
+        depthAttachment.format           = m_vulkanSwapchain.getDepthFormat();
+        depthAttachment.samples          = m_sampleCount;                   
+        depthAttachment.loadOp           = VK_ATTACHMENT_LOAD_OP_CLEAR;            
+        depthAttachment.storeOp          = VK_ATTACHMENT_STORE_OP_STORE;             
+        depthAttachment.stencilLoadOp    = VK_ATTACHMENT_LOAD_OP_DONT_CARE;   
+        depthAttachment.stencilStoreOp   = VK_ATTACHMENT_STORE_OP_DONT_CARE;  
+        depthAttachment.initialLayout    = VK_IMAGE_LAYOUT_UNDEFINED;         
+        depthAttachment.finalLayout      = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;  
+
         VkAttachmentReference depthAttachmentRef{};
-        depthAttachmentRef.attachment = 1;
-        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depthAttachmentRef.attachment    = msaaEnabled ? 2 : 1;
+        depthAttachmentRef.layout        = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-        // subpass description
+        VkSubpassDependency depthDependency{};
+        depthDependency.srcSubpass       = VK_SUBPASS_EXTERNAL;
+        depthDependency.dstSubpass       = 0;
+        depthDependency.srcStageMask     = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        depthDependency.dstStageMask     = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        depthDependency.srcAccessMask    = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        depthDependency.dstAccessMask    = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+        depthDependency.dependencyFlags  = 0;
+
+        // resolve attachment: description, reference (msaa only)
+        VkAttachmentDescription resolveAttachment{};
+        VkAttachmentReference resolveAttachmentRef{};
+        if (msaaEnabled)
+        {
+            resolveAttachment                = colorAttachment;
+            resolveAttachment.samples        = VK_SAMPLE_COUNT_1_BIT;
+            resolveAttachment.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
+            resolveAttachment.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+            resolveAttachmentRef.attachment  = 1;                                       
+            resolveAttachmentRef.layout      = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; 
+        }    
+
+        // subpass description 
         VkSubpassDescription subpass{};
-        subpass.flags = 0;
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.inputAttachmentCount = 0;
-        subpass.pInputAttachments = nullptr;
-        subpass.colorAttachmentCount = 1;                                   
-        subpass.pColorAttachments = &colorAttachmentRef;                    
-        subpass.pResolveAttachments = nullptr;
-        subpass.pDepthStencilAttachment = &depthAttachmentRef;
-        subpass.preserveAttachmentCount = 0;
-        subpass.pPreserveAttachments = nullptr;
+        subpass.flags                    = 0;
+        subpass.pipelineBindPoint        = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.inputAttachmentCount     = 0;
+        subpass.pInputAttachments        = nullptr;
+        subpass.colorAttachmentCount     = 1;                                   
+        subpass.pColorAttachments        = &colorAttachmentRef;      
+        subpass.pResolveAttachments      = msaaEnabled ? &resolveAttachmentRef : nullptr;
+        subpass.pDepthStencilAttachment  = &depthAttachmentRef;
+        subpass.preserveAttachmentCount  = 0;
+        subpass.pPreserveAttachments     = nullptr;
 
-        std::vector<VkAttachmentDescription> attachments { colorAttachment, depthAttachment };
+        // setup attachments, subpasses and dependencies
+        std::vector<VkAttachmentDescription> attachments { colorAttachment }; 
+        if (msaaEnabled) { attachments.emplace_back(resolveAttachment); }  
+        attachments.emplace_back(depthAttachment); 
+
         std::vector<VkSubpassDescription> subpasses { subpass };
+        std::vector<VkSubpassDependency> dependencies { depthDependency, colorDependency };   
 
-        // setup render pass with specified attachments, subpasses and dependencies
-        if (!m_renderPass.initialize(m_vkDevice, attachments, subpasses))
+        // setup render pass 
+        if (!m_renderPass.initialize(m_vkDevice, attachments, subpasses, dependencies))
         {
             VK_LOG_ERROR("Renderer::createRenderPasses failed to initialize render pass");
             return false;
@@ -562,7 +622,7 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::createGraphicsPipeline()
+    bool Renderer::createGraphicsPipeline() noexcept
     {
         // vertex input bindings
         VkVertexInputBindingDescription vertexBindings[2]{};
@@ -649,7 +709,7 @@ namespace keplar
         multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         multisampleState.pNext = nullptr;
         multisampleState.flags = 0;
-        multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        multisampleState.rasterizationSamples = m_sampleCount;
 
         // depth stencil state
         VkPipelineDepthStencilStateCreateInfo depthStencilState{};
@@ -705,22 +765,39 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::createFramebuffers()
+    bool Renderer::createFramebuffers() noexcept
     {
         // allocate framebuffer for each swapchain image
         m_framebuffers.resize(m_swapchainImageCount);
 
         // get swapchain properties
-        const auto colorImageViews = m_vulkanSwapchain.getColorImageViews();
-        const auto depthImageView  = m_vulkanSwapchain.getDepthImageView();
-        const auto swapchainExtent = m_vulkanSwapchain.getExtent();
+        const auto swapchainImageViews = m_vulkanSwapchain.getColorImageViews();
+        const auto swapchainExtent     = m_vulkanSwapchain.getExtent();
+        const auto msaaEnabled         = m_sampleCount > VK_SAMPLE_COUNT_1_BIT;
 
+        // prefetch attachments
+        VkImageView colorImageView   = VK_NULL_HANDLE;
+        VkImageView depthImageView  = VK_NULL_HANDLE;
+        if (msaaEnabled)
+        {
+            colorImageView  = m_msaaTarget.getColorImageView();
+            depthImageView  = m_msaaTarget.getDepthImageView();
+        }
+        else 
+        {
+            depthImageView  = m_vulkanSwapchain.getDepthImageView();
+        }
+
+        // framebuffer attachments: color, resolve, depth
+        VkImageView attachments[3]{ VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE };
+        
         // framebuffer creation info
         VkFramebufferCreateInfo framebufferCreateInfo{};
         framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebufferCreateInfo.pNext = nullptr;
         framebufferCreateInfo.flags = 0;
         framebufferCreateInfo.renderPass = m_renderPass.get();
+        framebufferCreateInfo.pAttachments = attachments;
         framebufferCreateInfo.width = swapchainExtent.width;
         framebufferCreateInfo.height = swapchainExtent.height;
         framebufferCreateInfo.layers = 1;
@@ -728,11 +805,22 @@ namespace keplar
         // create framebuffer per swapchain image view
         for (uint32_t i = 0; i < m_swapchainImageCount; ++i)
         {
-            // set attachments for this framebuffer
-            VkImageView attachments[2] = { colorImageViews[i], depthImageView };
-            framebufferCreateInfo.attachmentCount = 2;
-            framebufferCreateInfo.pAttachments = attachments;
-
+            if (msaaEnabled)
+            {
+                // msaa enabled: [0] multisampled color, [1] swapchain resolve, [2] multisampled depth
+                framebufferCreateInfo.attachmentCount = 3;
+                attachments[0] = colorImageView;
+                attachments[1] = swapchainImageViews[i];
+                attachments[2] = depthImageView;
+            }
+            else 
+            {
+                // msaa disabled: [0] swapchain color, [1] swapchain depth
+                framebufferCreateInfo.attachmentCount = 2;
+                attachments[0] = swapchainImageViews[i];
+                attachments[1] = depthImageView;
+            }
+            
             // initialize framebuffer 
             if (!m_framebuffers[i].initialize(m_vkDevice, framebufferCreateInfo))
             {
@@ -745,7 +833,7 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::createSyncPrimitives()
+    bool Renderer::createSyncPrimitives() noexcept
     {
         // allocate sync primitives for each frame in flight
         m_frameSyncPrimitives.resize(m_maxFramesInFlight);
@@ -793,13 +881,25 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::buildCommandBuffers()
+    bool Renderer::buildCommandBuffers() noexcept
     {
+        // check if msaa is enabled
+        const bool msaaEnabled = m_sampleCount > VK_SAMPLE_COUNT_1_BIT;
+
         // clear values for render pass; color: 0, depth-stencil: 1
-        VkClearValue clearValues[2]{};
-        clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
-        clearValues[1].depthStencil = { 1.0f, 0 };
-        
+        VkClearValue clearValues[3]{};
+        if (msaaEnabled)
+        {
+            clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+            clearValues[1].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+            clearValues[2].depthStencil = { 1.0f, 0 };
+        }
+        else 
+        {
+            clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+            clearValues[1].depthStencil = { 1.0f, 0 };
+        }
+
         // render pass begin info (framebuffer updated per command buffer)
         VkRenderPassBeginInfo renderPassBeginInfo{};
         renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -807,7 +907,7 @@ namespace keplar
         renderPassBeginInfo.renderPass = m_renderPass.get();
         renderPassBeginInfo.renderArea.offset = {0, 0};
         renderPassBeginInfo.renderArea.extent = m_vulkanSwapchain.getExtent();
-        renderPassBeginInfo.clearValueCount = 2;
+        renderPassBeginInfo.clearValueCount = msaaEnabled ? 3 : 2;
         renderPassBeginInfo.pClearValues = clearValues;
 
         // vertex buffer bindings: position at binding 0, color at binding 1
@@ -847,15 +947,14 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::updateUniformBuffer()
-    {    
-        // update matrices for the current frame
+    bool Renderer::updateUniformBuffer() noexcept
+    {
         ubo::FrameData& frameData = m_uboFrameData[m_currentImageIndex];
         frameData.model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
         frameData.view = m_camera->getViewMatrix();
         frameData.projection = m_camera->getProjectionMatrix();
 
-        // upload data to the host-visible uniform buffer
+        // upload to uniform buffer
         if (!m_uniformBuffers[m_currentImageIndex].uploadHostVisible(&frameData, sizeof(frameData)))
         {
             VK_LOG_ERROR("Renderer::updateUniformBuffers failed for frame: %d", m_currentImageIndex);

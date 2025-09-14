@@ -33,7 +33,7 @@ namespace keplar
             virtual void removeListener(EventListener* listener) noexcept = 0;
 
             // vulkan 
-            virtual VkSurfaceKHR createVulkanSurface(VkInstance vkInstance) const noexcept = 0;
-            virtual std::vector<std::string_view> getSurfaceInstanceExtensions() const noexcept = 0;
+            virtual VkSurfaceKHR createSurface(VkInstance vkInstance) const noexcept = 0;
+            virtual std::vector<std::string_view> getSurfaceExtensions() const noexcept = 0;
     };
 }   // namespace keplar

@@ -147,7 +147,7 @@ namespace keplar
         m_eventManager.removeListener(listener);
     }
 
-    VkSurfaceKHR Win32Platform::createVulkanSurface(VkInstance vkInstance) const noexcept
+    VkSurfaceKHR Win32Platform::createSurface(VkInstance vkInstance) const noexcept
     {
         VkSurfaceKHR vkSurfaceKHR = VK_NULL_HANDLE;  
         if (vkInstance == VK_NULL_HANDLE) 
@@ -167,7 +167,7 @@ namespace keplar
         return vkSurfaceKHR;
     }
 
-    std::vector<std::string_view> Win32Platform::getSurfaceInstanceExtensions() const noexcept
+    std::vector<std::string_view> Win32Platform::getSurfaceExtensions() const noexcept
     {
         return { VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME };
     }
@@ -241,7 +241,7 @@ namespace keplar
         return (DefWindowProc(hwnd, iMsg, wParam, lParam));
     }
 
-    void Win32Platform::toggleFullscreen()
+    void Win32Platform::toggleFullscreen() noexcept
     {
         MONITORINFO monitorInfo {};                                            
         monitorInfo.cbSize = sizeof(MONITORINFO);                    
@@ -252,7 +252,7 @@ namespace keplar
             if (m_windowStyle & WS_OVERLAPPEDWINDOW)               
             {
                 if (GetWindowPlacement(m_hwnd, &m_windowPlacement) && 
-                    GetMonitorInfo(MonitorFromWindow(m_hwnd, MONITORINFOF_PRIMARY), &monitorInfo))
+                    GetMonitorInfo(MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTOPRIMARY), &monitorInfo))
                 {
                     SetWindowLong(m_hwnd, GWL_STYLE, (m_windowStyle & ~WS_OVERLAPPEDWINDOW));
                     SetWindowPos(m_hwnd, 

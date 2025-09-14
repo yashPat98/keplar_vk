@@ -20,7 +20,7 @@ namespace keplar
         , m_imageExtent{}
         , m_preTransform(VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
         , m_depthImage(VK_NULL_HANDLE)
-        , m_depthDeviceMemory(VK_NULL_HANDLE)
+        , m_depthMemory(VK_NULL_HANDLE)
         , m_depthImageView(VK_NULL_HANDLE)
         , m_depthFormat(VK_FORMAT_UNDEFINED)
     {
@@ -287,8 +287,9 @@ namespace keplar
             VK_LOG_WARN("vkGetSwapchainImagesKHR returned VK_INCOMPLETE; resized swapchain images to %u.", swapchainImageCount);
         }
 
-        // create image views 
         m_colorImageViews.resize(swapchainImageCount, VK_NULL_HANDLE);
+
+        // create image views 
         VkImageViewCreateInfo vkImageViewCreateInfo{};
         vkImageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         vkImageViewCreateInfo.pNext = nullptr;
@@ -384,7 +385,7 @@ namespace keplar
 
         // find suitable memory type
         auto memoryTypeIndex = m_device.findMemoryType(memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        if (!memoryTypeIndex)
+        if (!memoryTypeIndex.has_value())
         {
             VK_LOG_ERROR("findMemoryType failed to find suitable memory type for depth image");
             vkDestroyImage(m_vkDevice, m_depthImage, nullptr);
@@ -399,7 +400,7 @@ namespace keplar
         allocationInfo.memoryTypeIndex = *memoryTypeIndex;
 
         // allocate memory for depth image from vulkan heap
-        vkResult = vkAllocateMemory(m_vkDevice, &allocationInfo, nullptr, &m_depthDeviceMemory);
+        vkResult = vkAllocateMemory(m_vkDevice, &allocationInfo, nullptr, &m_depthMemory);
         if (vkResult != VK_SUCCESS)
         {
             VK_LOG_FATAL("vkAllocateMemory failed to allocate memory for depth image : %s (code: %d)", string_VkResult(vkResult), vkResult);
@@ -408,11 +409,11 @@ namespace keplar
         }
 
         // bind depth image to device memory
-        vkResult = vkBindImageMemory(m_vkDevice, m_depthImage, m_depthDeviceMemory, 0);
+        vkResult = vkBindImageMemory(m_vkDevice, m_depthImage, m_depthMemory, 0);
         if (vkResult != VK_SUCCESS)
         {
             VK_LOG_FATAL("vkBindImageMemory failed to bind depth image to device memory : %s (code: %d)", string_VkResult(vkResult), vkResult);
-            vkFreeMemory(m_vkDevice, m_depthDeviceMemory, nullptr);
+            vkFreeMemory(m_vkDevice, m_depthMemory, nullptr);
             vkDestroyImage(m_vkDevice, m_depthImage, nullptr);
             return false;
         }
@@ -444,7 +445,7 @@ namespace keplar
         if (vkResult != VK_SUCCESS)
         {
             VK_LOG_FATAL("vkCreateImageView failed to create view for depth image : %s (code: %d)", string_VkResult(vkResult), vkResult);
-            vkFreeMemory(m_vkDevice, m_depthDeviceMemory, nullptr);
+            vkFreeMemory(m_vkDevice, m_depthMemory, nullptr);
             vkDestroyImage(m_vkDevice, m_depthImage, nullptr);
             return false;
         }
@@ -462,13 +463,6 @@ namespace keplar
             m_depthImageView = VK_NULL_HANDLE;
         }
 
-        // free device memory for depth image
-        if (m_depthDeviceMemory != VK_NULL_HANDLE)
-        {
-            vkFreeMemory(m_vkDevice, m_depthDeviceMemory, nullptr);
-            m_depthDeviceMemory = VK_NULL_HANDLE;
-        }
-
         // destroy depth image
         if (m_depthImage != VK_NULL_HANDLE)
         {
@@ -476,18 +470,25 @@ namespace keplar
             m_depthImage = VK_NULL_HANDLE;
         }
 
-        // destroy color image views
-        for (auto& view : m_colorImageViews)
+        // free depth memory
+        if (m_depthMemory != VK_NULL_HANDLE)
         {
-            if (view != VK_NULL_HANDLE)
+            vkFreeMemory(m_vkDevice, m_depthMemory, nullptr);
+            m_depthMemory = VK_NULL_HANDLE;
+        }
+
+        // destroy color image view
+        for (size_t i = 0; i < m_imageCount; ++i)
+        {
+            if (m_colorImageViews[i] != VK_NULL_HANDLE)
             {
-                vkDestroyImageView(m_vkDevice, view, nullptr);
-                view = VK_NULL_HANDLE;
+                vkDestroyImageView(m_vkDevice, m_colorImageViews[i], nullptr);
+                m_colorImageViews[i] = VK_NULL_HANDLE;
             }
         }
 
         // clear vectors
-        m_colorImageViews.clear();
         m_colorImages.clear();
+        m_colorImageViews.clear();
     }
 }   // namespace keplar

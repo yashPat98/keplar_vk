@@ -24,6 +24,7 @@
 #include "vulkan/vulkan_pipeline.hpp"
 #include "shader_structs.hpp"
 #include "camera.hpp"
+#include "msaa_target.hpp"
 
 namespace keplar
 {
@@ -52,21 +53,22 @@ namespace keplar
             std::shared_ptr<Camera> getCamera() const noexcept { return m_camera; }
 
         private:
-            bool createSwapchain();
-            bool createCommandPool();
-            bool createCommandBuffers();
-            bool createVertexBuffers();
-            bool createUniformBuffers();
-            bool createShaderModules();
-            bool createDescriptorSetLayouts();
-            bool createDescriptorPool();
-            bool createDescriptorSets();
-            bool createRenderPasses(); 
-            bool createGraphicsPipeline();
-            bool createFramebuffers();
-            bool createSyncPrimitives();
-            bool buildCommandBuffers();
-            bool updateUniformBuffer();
+            bool createSwapchain() noexcept;
+            bool createMsaaTarget() noexcept;
+            bool createCommandPool() noexcept;
+            bool createCommandBuffers() noexcept;
+            bool createVertexBuffers() noexcept;
+            bool createUniformBuffers() noexcept;
+            bool createShaderModules() noexcept;
+            bool createDescriptorSetLayouts() noexcept;
+            bool createDescriptorPool() noexcept;
+            bool createDescriptorSets() noexcept;
+            bool createRenderPasses() noexcept; 
+            bool createGraphicsPipeline() noexcept;
+            bool createFramebuffers() noexcept;
+            bool createSyncPrimitives() noexcept;
+            bool buildCommandBuffers() noexcept;
+            bool updateUniformBuffer() noexcept;
 
         private:
             // per frame sync primitives
@@ -85,7 +87,7 @@ namespace keplar
             const VulkanDevice&                 m_vulkanDevice;
             
             // swapchain for presentation
-            VulkanSwapchain                     m_vulkanSwapchain; 
+            VulkanSwapchain                     m_vulkanSwapchain;   
 
             // vulkan handles
             VkDevice                            m_vkDevice;
@@ -96,6 +98,10 @@ namespace keplar
             // window dimensions
             uint32_t                            m_windowWidth;
             uint32_t                            m_windowHeight;
+
+            // multisampling target 
+            MsaaTarget                          m_msaaTarget;      
+            VkSampleCountFlagBits               m_sampleCount; 
 
             // rendering state
             uint32_t                            m_swapchainImageCount;
@@ -126,7 +132,7 @@ namespace keplar
             // descriptor sets and UBOs
             std::vector<VkDescriptorSet>        m_descriptorSets;
             std::vector<ubo::FrameData>         m_uboFrameData;
-            
+
             // main camera
             std::shared_ptr<Camera>             m_camera;
     };

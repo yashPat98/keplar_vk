@@ -25,8 +25,8 @@ namespace keplar
             VulkanSurface& operator=(VulkanSurface&&) = delete;
 
             // accessors
-            VkSurfaceKHR get() const noexcept;
-            bool isValid() const noexcept;
+            VkSurfaceKHR get() const noexcept { return m_vkSurfaceKHR; }
+            bool isValid() const noexcept { return (m_vkSurfaceKHR != VK_NULL_HANDLE); }
 
             // query surface support details 
             bool canQueueFamilyPresent(VkPhysicalDevice vkPhysicalDevice, uint32_t queueFamilyIndex) const noexcept; 

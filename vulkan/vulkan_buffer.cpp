@@ -330,7 +330,7 @@ namespace keplar
 
         // find suitable memory type
         auto memoryTypeIndex = device.findMemoryType(vkMemoryRequirements.memoryTypeBits, propertyFlags);
-        if (!memoryTypeIndex)
+        if (!memoryTypeIndex.has_value())
         {
             return false;
         }

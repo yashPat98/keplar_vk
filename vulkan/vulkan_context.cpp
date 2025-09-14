@@ -78,7 +78,7 @@ namespace keplar
 
         // append platform-specific instance extensions 
         VulkanContextConfig config = *m_config;
-        const auto& platformExtensions = m_platform->getSurfaceInstanceExtensions();
+        const auto& platformExtensions = m_platform->getSurfaceExtensions();
         config.mInstanceExtensions.insert(config.mInstanceExtensions.begin(), platformExtensions.begin(), platformExtensions.end());
 
         // set default validation layer if none provided
