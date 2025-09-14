@@ -1,10 +1,11 @@
 // ────────────────────────────────────────────
-//  File: vk_utils.hpp · Created by Yash Patel · 6-27-2025
+//  File: vulkan_utils.hpp · Created by Yash Patel · 6-27-2025
 // ────────────────────────────────────────────
 
 #pragma once
 
-#include "vk_config.hpp"
+#include "vulkan_config.hpp"
+#include "utils/logger.hpp"
 
 // khronos validation layer macros to avoid typos
 #define VK_LAYER_KHRONOS_VALIDATION_NAME                            "VK_LAYER_KHRONOS_validation"

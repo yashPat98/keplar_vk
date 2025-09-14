@@ -3,8 +3,12 @@
 // ────────────────────────────────────────────
 
 #include "vulkan_buffer.hpp"
-#include "utils/logger.hpp"
+
+#include "vulkan/vulkan_device.hpp"
+#include "vulkan/vulkan_command_pool.hpp"
 #include "vulkan/vulkan_command_buffer.hpp"
+#include "vulkan/vulkan_fence.hpp"
+#include "utils/logger.hpp"
 
 namespace keplar
 {

@@ -5,14 +5,15 @@
 #pragma once
 
 #include <memory>
-
-#include "vk_config.hpp"
-#include "vulkan_context.hpp"
-#include "vulkan_surface.hpp"
-#include "vulkan_device.hpp"
+#include "vulkan_config.hpp"
 
 namespace keplar
 {
+    // forward declarations
+    class VulkanContext;
+    class VulkanSurface;
+    class VulkanDevice;
+
     class VulkanSwapchain final 
     {
         public:

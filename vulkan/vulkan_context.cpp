@@ -3,8 +3,13 @@
 // ────────────────────────────────────────────
 
 #include "vulkan_context.hpp"
+
+#include "platform/platform.hpp"
+#include "vulkan_instance.hpp"
+#include "vulkan_surface.hpp"
+#include "vulkan_device.hpp"
+#include "vulkan_utils.hpp"
 #include "utils/logger.hpp"
-#include "vk_utils.hpp"
 
 namespace keplar
 {

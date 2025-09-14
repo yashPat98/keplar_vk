@@ -3,7 +3,7 @@
 // ────────────────────────────────────────────
 
 #include "vulkan_fence.hpp"
-#include "vk_utils.hpp"
+#include "vulkan_utils.hpp"
 #include "utils/logger.hpp"
 
 namespace keplar

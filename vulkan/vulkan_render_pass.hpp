@@ -6,8 +6,7 @@
 
 #include <memory>
 
-#include "vk_config.hpp"
-#include "vulkan_device.hpp"
+#include "vulkan_config.hpp"
 
 namespace keplar
 {

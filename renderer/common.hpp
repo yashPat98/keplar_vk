@@ -1,17 +1,14 @@
 // ────────────────────────────────────────────
-//  File: shader_structs.hpp · Created by Yash Patel · 7-24-2025
+//  File: common.hpp · Created by Yash Patel · 9-14-2025
 // ────────────────────────────────────────────
 
 #pragma once
 
-#include "common.hpp"
+// include GLM headers
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 
-namespace keplar::ubo
-{
-    struct alignas(16) FrameData
-    {
-        glm::mat4 model;
-        glm::mat4 view;
-        glm::mat4 projection;
-    };
-}   // namespace keplar
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+

@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "vulkan/vk_config.hpp"
+#include "vulkan/vulkan_config.hpp"
 #include <optional>
 
 namespace keplar

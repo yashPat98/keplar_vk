@@ -5,8 +5,8 @@
 #include "vulkan_device.hpp"
 
 #include <unordered_set>
+#include "vulkan_utils.hpp"
 #include "utils/logger.hpp"
-#include "vk_utils.hpp"
 
 namespace keplar
 {

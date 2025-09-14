@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "vk_config.hpp"
 #include <optional>
+#include "vulkan_config.hpp"
 
 namespace keplar
 {

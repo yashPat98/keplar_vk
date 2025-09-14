@@ -1,5 +1,5 @@
 // ────────────────────────────────────────────
-//  File: config.hpp · Created by Yash Patel · 8-19-2025
+//  File: keplar_config.hpp · Created by Yash Patel · 8-19-2025
 // ────────────────────────────────────────────
 
 #pragma once

@@ -3,11 +3,16 @@
 // ────────────────────────────────────────────
 
 #include "keplar_app.hpp"
-#include "config.hpp"
-#include "utils/logger.hpp"
-#include "platform/platform_factory.hpp"
-#include "vulkan/vk_utils.hpp"
+
 #include <chrono> 
+
+#include "keplar_config.hpp"
+#include "platform/platform.hpp"
+#include "platform/platform_factory.hpp"
+#include "vulkan/vulkan_context.hpp"
+#include "vulkan/vulkan_utils.hpp"
+#include "renderer/renderer.hpp"
+#include "utils/logger.hpp"
 
 namespace keplar
 {

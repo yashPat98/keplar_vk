@@ -5,8 +5,9 @@
 #pragma once
 
 #include <array>
+
 #include "platform/event_listener.hpp"
-#include "vulkan/vk_config.hpp"
+#include "common.hpp"
 
 namespace keplar
 {

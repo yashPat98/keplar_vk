@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "vulkan/vk_config.hpp"
+#include "vulkan/vulkan_config.hpp"
 #include "event_listener.hpp"
 
 namespace keplar

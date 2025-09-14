@@ -6,8 +6,9 @@
 
 #include <sstream>
 #include <algorithm> 
+
+#include "vulkan_utils.hpp"
 #include "utils/logger.hpp"
-#include "vk_utils.hpp"
 
 namespace 
 {

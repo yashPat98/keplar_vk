@@ -4,12 +4,14 @@
 
 #pragma once 
 
-#include "vulkan/vk_config.hpp"
-#include "vulkan/vulkan_swapchain.hpp"
-#include "vulkan/vulkan_device.hpp"
+#include "vulkan/vulkan_config.hpp"
 
 namespace keplar
 {
+    // forward declarations
+    class VulkanDevice;
+    class VulkanSwapchain;
+
     class MsaaTarget
     {
         public:

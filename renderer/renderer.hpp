@@ -9,7 +9,9 @@
 
 #include "platform/event_listener.hpp"
 #include "utils/thread_pool.hpp"
+
 #include "vulkan/vulkan_context.hpp"
+#include "vulkan/vulkan_device.hpp"
 #include "vulkan/vulkan_swapchain.hpp"
 #include "vulkan/vulkan_command_pool.hpp"
 #include "vulkan/vulkan_command_buffer.hpp"
@@ -22,9 +24,10 @@
 #include "vulkan/vulkan_descriptor_set_layout.hpp"
 #include "vulkan/vulkan_descriptor_pool.hpp"
 #include "vulkan/vulkan_pipeline.hpp"
+
+#include "msaa_target.hpp"
 #include "shader_structs.hpp"
 #include "camera.hpp"
-#include "msaa_target.hpp"
 
 namespace keplar
 {

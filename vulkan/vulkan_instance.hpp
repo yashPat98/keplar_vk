@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-#include "vulkan/vk_config.hpp"
+#include "vulkan/vulkan_config.hpp"
 
 namespace keplar
 {

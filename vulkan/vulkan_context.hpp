@@ -5,14 +5,18 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
-#include "platform/platform.hpp"
-#include "vulkan_instance.hpp"
-#include "vulkan_surface.hpp"
-#include "vulkan_device.hpp"
+#include "vulkan_config.hpp"
 
 namespace keplar
 {
+    // forward declarations
+    class Platform;
+    class VulkanInstance;
+    class VulkanSurface;
+    class VulkanDevice;
+
     class VulkanContext
     {
         public: 

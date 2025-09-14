@@ -1,11 +1,12 @@
 // ────────────────────────────────────────────
-//  File: vk_config.hpp · Created by Yash Patel · 6-27-2025
+//  File: vulkan_config.hpp · Created by Yash Patel · 6-27-2025
 // ────────────────────────────────────────────
 
 #pragma once
 
 // std headers
 #include <vector>
+#include <string_view>
 
 // define platform-specific Vulkan surface extension
 #if defined(_WIN32)
@@ -19,14 +20,6 @@
 // include Vulkan headers
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
-
-// include GLM headers
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 
 namespace keplar 
 {

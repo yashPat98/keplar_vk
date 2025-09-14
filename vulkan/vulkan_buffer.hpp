@@ -2,14 +2,14 @@
 //  File: vulkan_buffer.hpp · Created by Yash Patel · 8-2-2025
 // ────────────────────────────────────────────
 
-#include "vulkan/vk_config.hpp"
-#include "vulkan/vulkan_device.hpp"
-#include "vulkan/vulkan_command_pool.hpp"
-#include "vulkan/vulkan_fence.hpp"
-#include "utils/thread_pool.hpp"
+#include "vulkan/vulkan_config.hpp"
 
 namespace keplar
 {
+    // forward declarations
+    class VulkanDevice;
+    class VulkanCommandPool;
+
     class VulkanBuffer final
     {
         public:

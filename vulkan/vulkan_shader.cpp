@@ -5,7 +5,7 @@
 #include "vulkan_shader.hpp"
 
 #include <fstream>
-#include "core/config.hpp"
+#include "core/keplar_config.hpp"
 #include "utils/logger.hpp"
 
 namespace keplar

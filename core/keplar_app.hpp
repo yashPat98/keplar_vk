@@ -5,12 +5,14 @@
 #pragma once
 
 #include <memory>
-#include "platform/platform.hpp"
-#include "vulkan/vulkan_context.hpp"
-#include "renderer/renderer.hpp"
 
 namespace keplar
 {
+    // forward declarations
+    class Platform;
+    class VulkanContext;
+    class Renderer;
+
     class KeplarApp final
     {
         public:

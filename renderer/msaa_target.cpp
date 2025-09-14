@@ -3,6 +3,9 @@
 // ────────────────────────────────────────────
 
 #include "msaa_target.hpp"
+
+#include "vulkan/vulkan_device.hpp"
+#include "vulkan/vulkan_swapchain.hpp"
 #include "utils/logger.hpp"
 
 namespace keplar

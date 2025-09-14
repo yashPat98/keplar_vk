@@ -4,7 +4,7 @@
 
 #include "win32_platform.hpp"
 #include "utils/logger.hpp"
-#include "vulkan/vk_utils.hpp"
+#include "vulkan/vulkan_utils.hpp"
 
 namespace keplar
 {

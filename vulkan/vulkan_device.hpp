@@ -8,7 +8,7 @@
 #include <vector>
 #include <optional>
 
-#include "vk_config.hpp"
+#include "vulkan_config.hpp"
 #include "vulkan_surface.hpp"
 
 namespace keplar
