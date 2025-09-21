@@ -9,7 +9,7 @@ namespace
 {
     static inline constexpr float CAMERA_DEFAULT_SPEED       = 30.0f;
     static inline constexpr float CAMERA_DEFAULT_DAMPING     = 1000.0f;
-    static inline constexpr float CAMERA_CINEMATIC_DAMPING   = 5.0f;
+    static inline constexpr float CAMERA_CINEMATIC_DAMPING   = 10.0f;
     static inline constexpr float CAMERA_DEFAULT_SENSITIVITY = 0.1f;
     static inline constexpr float CAMERA_DEFAULT_SCROLLSPEED = 2.0f;
 }
@@ -34,6 +34,7 @@ namespace keplar
         , m_targetYaw(-90.0f)
         , m_targetPitch(0.0f)
         , m_speed(CAMERA_DEFAULT_SPEED)
+        , m_rotAcceleration(30.0f)
         , m_rotVelocity(0.0f)
         , m_keys{}
         , m_viewMatrix(1.0f)
@@ -234,10 +235,10 @@ namespace keplar
             // compute difference between target and current rotation
             glm::vec2 delta(m_targetYaw - m_yaw, m_targetPitch - m_pitch);
 
-            // apply damping and integrate velocity
-            float damping = std::exp(-m_rotDamping * dt);
-            m_rotVelocity += delta * (1.0f - damping);
-            m_rotVelocity *= damping;
+            // Compute damping and acceleration toward the target delta 
+            glm::vec2 acceleration = delta * m_rotAcceleration;
+            glm::vec2 dampedVelocity = m_rotVelocity * std::exp(-m_rotDamping * dt);
+            m_rotVelocity = dampedVelocity + acceleration * dt;
 
             // update actual rotation
             m_yaw   += m_rotVelocity.x * dt;

@@ -76,6 +76,7 @@ namespace keplar
             float m_speed;
             float m_posDamping;
             float m_rotDamping;
+            float m_rotAcceleration;
             glm::vec2 m_rotVelocity;
             std::array<bool, 1024> m_keys;
 
