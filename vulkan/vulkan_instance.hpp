@@ -15,7 +15,7 @@ namespace keplar
     {
         public:
             // creation and destruction
-            static std::unique_ptr<VulkanInstance> create(const VulkanContextConfig& config) noexcept;
+            static std::shared_ptr<VulkanInstance> create(const VulkanContextConfig& config) noexcept;
             ~VulkanInstance();
 
             // disable copy and move semantics to enforce unique ownership

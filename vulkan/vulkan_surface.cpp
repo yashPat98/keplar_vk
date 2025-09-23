@@ -7,9 +7,9 @@
 
 namespace keplar
 {
-    std::unique_ptr<VulkanSurface> VulkanSurface::create(const VulkanInstance& instance, const Platform& platform) noexcept
+    std::shared_ptr<VulkanSurface> VulkanSurface::create(const VulkanInstance& instance, const Platform& platform) noexcept
     {
-        std::unique_ptr<VulkanSurface> surface(new VulkanSurface);
+        std::shared_ptr<VulkanSurface> surface(new VulkanSurface);
         if (!surface->initialize(instance, platform))
         {
             return nullptr;

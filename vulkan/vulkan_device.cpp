@@ -21,11 +21,11 @@ namespace keplar
         uint64_t mScore;
     };
 
-    std::unique_ptr<VulkanDevice> VulkanDevice::create(const VulkanInstance& instance, 
+    std::shared_ptr<VulkanDevice> VulkanDevice::create(const VulkanInstance& instance, 
                                                        const VulkanSurface& surface, 
                                                        const VulkanContextConfig& config) noexcept
     {
-        std::unique_ptr<VulkanDevice> device(new VulkanDevice);
+        std::shared_ptr<VulkanDevice> device(new VulkanDevice);
         if (!device->initialize(instance, surface, config))
         {
             return nullptr;

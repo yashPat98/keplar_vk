@@ -6,6 +6,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "vulkan/vulkan_config.hpp"
 #include "event_listener.hpp"
@@ -29,8 +30,8 @@ namespace keplar
             virtual uint32_t getWindowHeight() const noexcept = 0;
 
             // event listeners
-            virtual void addListener(EventListener* listener) noexcept = 0;
-            virtual void removeListener(EventListener* listener) noexcept = 0;
+            virtual void addListener(const std::shared_ptr<EventListener>& listener) noexcept = 0;
+            virtual void removeListener(const std::shared_ptr<EventListener>& listener) noexcept = 0;
 
             // vulkan 
             virtual VkSurfaceKHR createSurface(VkInstance vkInstance) const noexcept = 0;

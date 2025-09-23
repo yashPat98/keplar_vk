@@ -28,8 +28,8 @@ namespace keplar
             virtual uint32_t getWindowHeight() const noexcept override;
 
             // event listeners
-            virtual void addListener(EventListener* listener) noexcept override;
-            virtual void removeListener(EventListener* listener) noexcept override;
+            virtual void addListener(const std::shared_ptr<EventListener>& listener) noexcept override;
+            virtual void removeListener(const std::shared_ptr<EventListener>& listener) noexcept override;
 
             // vulkan 
             virtual VkSurfaceKHR createSurface(VkInstance vkInstance) const noexcept override;

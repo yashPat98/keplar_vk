@@ -137,12 +137,12 @@ namespace keplar
         return m_height;
     }
 
-    void Win32Platform::addListener(EventListener* listener) noexcept 
+    void Win32Platform::addListener(const std::shared_ptr<EventListener>& listener) noexcept 
     {
         m_eventManager.addListener(listener);
     }
 
-    void Win32Platform::removeListener(EventListener* listener) noexcept 
+    void Win32Platform::removeListener(const std::shared_ptr<EventListener>& listener) noexcept 
     {
         m_eventManager.removeListener(listener);
     }

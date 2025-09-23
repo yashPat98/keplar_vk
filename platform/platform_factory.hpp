@@ -9,5 +9,5 @@
 
 namespace keplar::platform
 {
-    std::unique_ptr<Platform> createPlatform();
+    std::shared_ptr<Platform> createPlatform();
 }   // namespace keplar

@@ -14,10 +14,10 @@
 
 namespace keplar
 {
-    VulkanSwapchain::VulkanSwapchain(const VulkanContext& context) noexcept
-        : m_device(context.getDevice())
-        , m_surface(context.getSurface())
-        , m_vkDevice(m_device.getDevice())
+    VulkanSwapchain::VulkanSwapchain(std::weak_ptr<VulkanSurface> surface, std::weak_ptr<VulkanDevice> device) noexcept
+        : m_surface(surface)
+        , m_device(device)
+        , m_vkDevice(VK_NULL_HANDLE)
         , m_vkSwapchainKHR(VK_NULL_HANDLE)
         , m_vkSurfaceFormatKHR{}
         , m_imageCount(0)
@@ -28,6 +28,10 @@ namespace keplar
         , m_depthImageView(VK_NULL_HANDLE)
         , m_depthFormat(VK_FORMAT_UNDEFINED)
     {
+        if (auto deviceLocked = m_device.lock())
+        {
+            m_vkDevice = deviceLocked->getDevice();
+        }
     }
 
     VulkanSwapchain::~VulkanSwapchain()
@@ -37,6 +41,15 @@ namespace keplar
 
     bool VulkanSwapchain::initialize(uint32_t width, uint32_t height) noexcept
     {
+        // get temporary access to surface and device
+        auto surface = m_surface.lock();
+        auto device  = m_device.lock();
+        if (!surface || !device)
+        {
+            VK_LOG_WARN("initialize :: failed to acquire surface or device");
+            return false;
+        }
+
         // validate window dimensions
         if (width == 0 || height == 0)
         {
@@ -45,19 +58,24 @@ namespace keplar
         }
 
         // select surface format & presentation mode
-        if (!chooseSurfaceFormat())                 { return false; }
-        if (!choosePresentMode())                   { return false; }
+        if (!chooseSurfaceFormat(*surface, *device))  { return false; }
+        if (!choosePresentMode(*surface, *device))    { return false; }
         
         // query surface capabilities and configure swapchain
-        const auto& surfaceCapabilities = m_surface.getCapabilities(m_device.getPhysicalDevice());
+        const auto& surfaceCapabilities = surface->getCapabilities(device->getPhysicalDevice());
         chooseImageCount(surfaceCapabilities);
         chooseSwapExtent(surfaceCapabilities, { width, height });
         choosePreTransform(surfaceCapabilities);
 
-        // create swapchain and its attachments
-        if (!createSwapchain(m_vkSwapchainKHR))     { return false; }
+        // create swapchain 
+        if (!createSwapchain(surface->get(), device->getQueueFamilyIndices(), m_vkSwapchainKHR)) 
+        { 
+            return false; 
+        }
+
+        // create swapchain attachments
         if (!createColorAttachment())               { return false; }
-        if (!createDepthAttachment())               { return false; }
+        if (!createDepthAttachment(*device))         { return false; }
 
         VK_LOG_DEBUG("initialize :: swapchain created successfully.");
         return true;
@@ -94,10 +112,10 @@ namespace keplar
         }
     }
 
-    bool VulkanSwapchain::chooseSurfaceFormat() noexcept
+    bool VulkanSwapchain::chooseSurfaceFormat(const VulkanSurface& surface, const VulkanDevice& device) noexcept
     {
         // get supported surface formats
-        const auto& surfaceFormats = m_surface.getSupportedFormats(m_device.getPhysicalDevice());
+        const auto& surfaceFormats = surface.getSupportedFormats(device.getPhysicalDevice());
         if (surfaceFormats.empty())
         {
             VK_LOG_FATAL("chooseSurfaceFormat :: no supported surface formats found for this device.");
@@ -128,10 +146,10 @@ namespace keplar
         return true;
     }
 
-    bool VulkanSwapchain::choosePresentMode() noexcept
+    bool VulkanSwapchain::choosePresentMode(const VulkanSurface& surface, const VulkanDevice& device) noexcept
     {
         // get supported present modes
-        const auto& presentModes = m_surface.getSupportedPresentModes(m_device.getPhysicalDevice());
+        const auto& presentModes = surface.getSupportedPresentModes(device.getPhysicalDevice());
         if (presentModes.empty())
         {
             VK_LOG_FATAL("choosePresentMode :: no supported present modes found for this device.");
@@ -195,14 +213,14 @@ namespace keplar
         }
     }
 
-    bool VulkanSwapchain::createSwapchain(VkSwapchainKHR oldSwapchain) noexcept
+    bool VulkanSwapchain::createSwapchain(VkSurfaceKHR vkSurface, QueueFamilyIndices indices, VkSwapchainKHR oldSwapchain) noexcept
     {
         // setup swapchain create info
         VkSwapchainCreateInfoKHR vkSwapchainCreateInfoKHR{};
         vkSwapchainCreateInfoKHR.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         vkSwapchainCreateInfoKHR.pNext = nullptr;
         vkSwapchainCreateInfoKHR.flags = 0;
-        vkSwapchainCreateInfoKHR.surface = m_surface.get();
+        vkSwapchainCreateInfoKHR.surface = vkSurface;
         vkSwapchainCreateInfoKHR.minImageCount = m_imageCount;
         vkSwapchainCreateInfoKHR.imageFormat = m_vkSurfaceFormatKHR.format;
         vkSwapchainCreateInfoKHR.imageColorSpace = m_vkSurfaceFormatKHR.colorSpace;
@@ -219,7 +237,6 @@ namespace keplar
         VK_LOG_DEBUG("swapchain creation info :: image count: %d, extent: %d x %d", m_imageCount, m_imageExtent.width, m_imageExtent.height);
 
         // configure sharing mode:
-        QueueFamilyIndices indices = m_device.getQueueFamilyIndices();
         if (indices.mGraphicsFamily.value() != indices.mPresentFamily.value())
         {
             uint32_t queueFamilyIndices[2] = { *indices.mGraphicsFamily, *indices.mPresentFamily };
@@ -326,7 +343,7 @@ namespace keplar
         return true;
     }
 
-    bool VulkanSwapchain::createDepthAttachment() noexcept
+    bool VulkanSwapchain::createDepthAttachment(const VulkanDevice& device) noexcept
     {
         // depth format candidate from best to worst
         VkFormat depthFormats[] = 
@@ -342,7 +359,7 @@ namespace keplar
         for (auto format : depthFormats)
         {
             VkFormatProperties formatProperties{};
-            vkGetPhysicalDeviceFormatProperties(m_device.getPhysicalDevice(), format, &formatProperties);
+            vkGetPhysicalDeviceFormatProperties(device.getPhysicalDevice(), format, &formatProperties);
 
             // check for depth stencil support for the format
             if (formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
@@ -388,7 +405,7 @@ namespace keplar
         vkGetImageMemoryRequirements(m_vkDevice, m_depthImage, &memoryRequirements);
 
         // find suitable memory type
-        auto memoryTypeIndex = m_device.findMemoryType(memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        auto memoryTypeIndex = device.findMemoryType(memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         if (!memoryTypeIndex.has_value())
         {
             VK_LOG_ERROR("findMemoryType failed to find suitable memory type for depth image");

@@ -27,19 +27,19 @@ namespace keplar
             KeplarApp& operator=(KeplarApp&&) = delete;
 
             // app lifecycle functions
-            bool initialize() noexcept;
+            bool initialize(std::unique_ptr<Renderer> renderer) noexcept;
             int run() noexcept;
             void shutdown() noexcept;
 
         private:
             // initialization helpers
-            bool createPlatform() noexcept;
-            bool createContext() noexcept;
-            bool createRenderer() noexcept;
+            bool initializePlatform() noexcept;
+            bool initializeContext() noexcept;
+            bool initializeRenderer() noexcept;
 
         private:
-            std::unique_ptr<Platform> m_platform;
-            std::unique_ptr<VulkanContext> m_vulkanContext;
-            std::unique_ptr<Renderer> m_renderer;
+            std::shared_ptr<Platform>       m_platform;
+            std::shared_ptr<VulkanContext>  m_vulkanContext;
+            std::shared_ptr<Renderer>       m_renderer;
     };
 }   // namespace keplar

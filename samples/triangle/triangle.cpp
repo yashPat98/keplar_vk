@@ -1,26 +1,20 @@
 // ────────────────────────────────────────────
-//  File: renderer.cpp · Created by Yash Patel · 7-24-2025
+//  File: triangle.cpp · Created by Yash Patel · 9-21-2025
 // ────────────────────────────────────────────
 
-#include "renderer.hpp"
-
-#include "common.hpp"
-#include "vulkan/vulkan_utils.hpp"
+#include "triangle.hpp"
 #include "utils/logger.hpp"
+#include "vulkan/vulkan_utils.hpp"
 
 namespace keplar
 {
-    Renderer::Renderer(const VulkanContext& context, uint32_t winWidth, uint32_t winHeight) noexcept
-        : m_threadPool(8)
-        , m_vulkanContext(context)
-        , m_vulkanDevice(context.getDevice())
-        , m_vulkanSwapchain(context)
-        , m_vkDevice(m_vulkanDevice.getDevice())
-        , m_presentQueue(m_vulkanDevice.getPresentQueue())
-        , m_graphicsQueue(m_vulkanDevice.getGraphicsQueue())
+    Triangle::Triangle() noexcept
+        : m_vkDevice(VK_NULL_HANDLE)
+        , m_presentQueue(VK_NULL_HANDLE)
+        , m_graphicsQueue(VK_NULL_HANDLE)
         , m_vkSwapchainKHR(VK_NULL_HANDLE)
-        , m_windowWidth(winWidth)
-        , m_windowHeight(winHeight)
+        , m_windowWidth(0)
+        , m_windowHeight(0)
         , m_sampleCount(VK_SAMPLE_COUNT_1_BIT)
         , m_swapchainImageCount(0)
         , m_maxFramesInFlight(0)
@@ -28,36 +22,58 @@ namespace keplar
         , m_currentFrameIndex(0)
         , m_readyToRender(false)
     {
-        // calculate aspect ratio of window and initialize camera
-        const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
-        m_camera = std::make_shared<Camera>(45.0f, aspectRatio, 0.1f, 100.0f);
     }
 
-    Renderer::~Renderer()
+    Triangle::~Triangle()
     {
         // stop any new rendering tasks from being submitted
         m_readyToRender.store(false); 
-
-        // wait until all tasks in the thread pool are finished
-        m_threadPool.waitIdle();
 
         // ensure GPU has completed all work submitted to the device
         vkDeviceWaitIdle(m_vkDevice);
 
         // destroy vulkan resources 
         m_commandPool.releaseBuffers(m_commandBuffers);
-        m_commandBuffers.clear();
     }
 
-    bool Renderer::initialize() noexcept
+    bool Triangle::initialize(std::weak_ptr<Platform> platform, std::weak_ptr<VulkanContext> context) noexcept
     {
+        // store non-owning references
+        m_platform = platform;
+        m_context = context;
+
+        // acquire shared access to context and platform
+        auto contextLocked = m_context.lock(); 
+        auto platformLocked = m_platform.lock();
+        if (!contextLocked || !platformLocked)
+        {
+            return false;
+        }
+
+        // store non-owning device reference and acquire shared access
+        m_device = contextLocked->getDevice();
+        auto device = m_device.lock();
+        if (!device)
+        {
+            return false;
+        }
+
+        // setup resources and cache vulkan handles
+        m_swapchain       = std::make_unique<VulkanSwapchain>(contextLocked->getSurface(), m_device);
+        m_vkDevice        = device->getDevice();
+        m_presentQueue    = device->getPresentQueue();
+        m_graphicsQueue   = device->getGraphicsQueue();
+        m_vkSwapchainKHR  = m_swapchain->get();
+        m_windowWidth     = platformLocked->getWindowWidth();
+        m_windowHeight    = platformLocked->getWindowHeight();
+
         // initialize vulkan resources
         if (!createSwapchain())             { return false; }
-        if (!createMsaaTarget())            { return false; }
-        if (!createCommandPool())           { return false; }
+        if (!createMsaaTarget(*device))     { return false; }
+        if (!createCommandPool(*device))    { return false; }
         if (!createCommandBuffers())        { return false; }
-        if (!createVertexBuffers())         { return false; }
-        if (!createUniformBuffers())        { return false; }
+        if (!createVertexBuffers(*device))  { return false; }
+        if (!createUniformBuffers(*device)) { return false; }
         if (!createShaderModules())         { return false; }
         if (!createDescriptorSetLayouts())  { return false; }
         if (!createDescriptorPool())        { return false; }
@@ -71,16 +87,16 @@ namespace keplar
         // initialization complete
         m_readyToRender.store(true);
 
-        VK_LOG_INFO("Renderer::initialize successful");
+        VK_LOG_INFO("Triangle::initialize successful");
         return true;
     }
 
-    bool Renderer::renderFrame() noexcept
+    bool Triangle::renderFrame() noexcept
     {
         // 1️⃣ skip frame if renderer is not ready
         if (!m_readyToRender.load())
         {
-            VK_LOG_DEBUG("Renderer::renderFrame skipped: renderer not ready");
+            VK_LOG_DEBUG("Triangle::renderFrame skipped: renderer not ready");
             return true;
         }
 
@@ -164,28 +180,27 @@ namespace keplar
         return true;
     }
 
-    bool Renderer::update(float dt) noexcept
+    bool Triangle::update(float /* dt */) noexcept
     {
-        // update camera 
-        m_camera->update(dt);
         return true;
     }
 
-    void Renderer::onWindowResize(uint32_t width, uint32_t height)
+    void Triangle::onWindowResize(uint32_t width, uint32_t height)
     {    
-        // window minimized: stop rendering
-        if (width == 0 || height == 0)
+        // window minimized or device not available: stop rendering
+        auto device = m_device.lock();
+        if (width == 0 || height == 0 || !device)
         {
             m_readyToRender.store(false);
             return;
         }
-        
+
         // stop rendering and wait for device to finish all operations
         m_readyToRender.store(false);
         vkDeviceWaitIdle(m_vkDevice);
 
         // recreate swapchain with new dimensions
-        if (!m_vulkanSwapchain.recreate(width, height))
+        if (!m_swapchain->recreate(width, height))
         {
             return;
         }
@@ -194,8 +209,8 @@ namespace keplar
         const uint32_t previousMaxFramesInFlight = m_maxFramesInFlight;
 
         // update swapchain handle and image count
-        m_vkSwapchainKHR      = m_vulkanSwapchain.get();
-        m_swapchainImageCount = m_vulkanSwapchain.getImageCount();
+        m_vkSwapchainKHR      = m_swapchain->get();
+        m_swapchainImageCount = m_swapchain->getImageCount();
         m_maxFramesInFlight   = glm::min(3u, m_swapchainImageCount);
 
         // teardown all dependent resources (framebuffers, pipeline, renderpass, command buffers)
@@ -210,7 +225,7 @@ namespace keplar
         m_commandBuffers.clear();
 
         // recreate all dependent resources
-        if (!createMsaaTarget())        { return; }
+        if (!createMsaaTarget(*device)) { return; }
         if (!createCommandBuffers())    { return; }
         if (!createRenderPasses())      { return; }
         if (!createGraphicsPipeline())  { return; }
@@ -239,49 +254,49 @@ namespace keplar
         m_readyToRender.store(true);
     }
 
-    bool Renderer::createSwapchain() noexcept
+    bool Triangle::createSwapchain() noexcept
     {
         // setup swapchain
-        if (!m_vulkanSwapchain.initialize(m_windowWidth, m_windowHeight))
+        if (!m_swapchain->initialize(m_windowWidth, m_windowHeight))
         {
-            VK_LOG_ERROR("Renderer::createSwapchain : failed to create swapchain fpr presentation.");
+            VK_LOG_ERROR("Triangle::createSwapchain : failed to create swapchain fpr presentation.");
             return false;
         }
 
         // retrieve swapchain handle and image count
-        m_vkSwapchainKHR = m_vulkanSwapchain.get();
-        m_swapchainImageCount = m_vulkanSwapchain.getImageCount();
+        m_vkSwapchainKHR = m_swapchain->get();
+        m_swapchainImageCount = m_swapchain->getImageCount();
         
         // vulkan spec suggests max frames in flight should be less than swapchain image count
         // to prevent CPU stalling while waiting for an image to become available for rendering.
         // setting an upper limit of 3 balances throughput and avoids stalls.
         m_maxFramesInFlight = glm::min(3u, m_swapchainImageCount);
-        VK_LOG_INFO("Renderer::createSwapchain : swapchain created successfully (max frames in flight: %d)", m_maxFramesInFlight);
+        VK_LOG_INFO("Triangle::createSwapchain : swapchain created successfully (max frames in flight: %d)", m_maxFramesInFlight);
         return true;
     }
 
-    bool Renderer::createMsaaTarget() noexcept
+    bool Triangle::createMsaaTarget(const VulkanDevice& device) noexcept
     {
         // initialize msaa color and depth targets for the current swapchain
-        if (m_msaaTarget.initialize(m_vulkanDevice, m_vulkanSwapchain, VK_SAMPLE_COUNT_8_BIT))
+        if (m_msaaTarget.initialize(device, *m_swapchain, VK_SAMPLE_COUNT_8_BIT))
         {
             // success
             m_sampleCount = m_msaaTarget.getSampleCount();
-            VK_LOG_DEBUG("Renderer::createMsaaTarget : msaa targets created successfully.");
+            VK_LOG_DEBUG("Triangle::createMsaaTarget : msaa targets created successfully.");
         }
         else 
         {
             // fall back to no msaa
-            VK_LOG_WARN("Renderer::createMsaaTarget : failed to create msaa color and depth targets.");
+            VK_LOG_WARN("Triangle::createMsaaTarget : failed to create msaa color and depth targets.");
         }
 
         return true;
     }
 
-    bool Renderer::createCommandPool() noexcept
+    bool Triangle::createCommandPool(const VulkanDevice& device) noexcept
     {
         // setup command pool for graphics queue
-        const auto graphicsFamilyIndex = m_vulkanDevice.getQueueFamilyIndices().mGraphicsFamily;
+        const auto graphicsFamilyIndex = device.getQueueFamilyIndices().mGraphicsFamily;
 
         // command pool creation info
         VkCommandPoolCreateInfo vkCommandPoolCreateInfo{};
@@ -293,29 +308,29 @@ namespace keplar
         // setup command pool
         if (!m_commandPool.initialize(m_vkDevice, vkCommandPoolCreateInfo))
         {
-            VK_LOG_ERROR("Renderer::createCommandPool : failed to initialize command pool.");
+            VK_LOG_ERROR("Triangle::createCommandPool : failed to initialize command pool.");
             return false;
         }
 
-        VK_LOG_DEBUG("Renderer::createCommandPool successful");
+        VK_LOG_DEBUG("Triangle::createCommandPool successful");
         return true;
     }
 
-    bool Renderer::createCommandBuffers() noexcept
+    bool Triangle::createCommandBuffers() noexcept
     {
         // allocate primary command buffers per swapchain
         m_commandBuffers = m_commandPool.allocateBuffers(m_swapchainImageCount, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
         if (m_commandBuffers.empty())
         {
-            VK_LOG_ERROR("Renderer::createCommandBuffers failed to allocate command buffers.");
+            VK_LOG_ERROR("Triangle::createCommandBuffers failed to allocate command buffers.");
             return false;
         }
 
-        VK_LOG_DEBUG("Renderer::createCommandBuffers successful");
+        VK_LOG_DEBUG("Triangle::createCommandBuffers successful");
         return true;
     }
 
-    bool Renderer::createVertexBuffers() noexcept
+    bool Triangle::createVertexBuffers(const VulkanDevice& device) noexcept
     {
         // define triangle vertex positions
         float triangle_position[] = 
@@ -346,25 +361,25 @@ namespace keplar
 
         // create triangle position buffer
         bufferCreateInfo.size = sizeof(triangle_position); 
-        if (!m_positionBuffer.createDeviceLocal(m_vulkanDevice, m_commandPool, bufferCreateInfo, triangle_position, sizeof(triangle_position)))
+        if (!m_positionBuffer.createDeviceLocal(device, m_commandPool, bufferCreateInfo, triangle_position, sizeof(triangle_position)))
         {
-            VK_LOG_ERROR("Renderer::createVertexBuffers failed to create device-local buffer for vertex positions");
+            VK_LOG_ERROR("Triangle::createVertexBuffers failed to create device-local buffer for vertex positions");
             return false;
         }
 
         // create triangle color buffer
         bufferCreateInfo.size = sizeof(triangle_colors); 
-        if (!m_colorBuffer.createDeviceLocal(m_vulkanDevice, m_commandPool, bufferCreateInfo, triangle_colors, sizeof(triangle_colors)))
+        if (!m_colorBuffer.createDeviceLocal(device, m_commandPool, bufferCreateInfo, triangle_colors, sizeof(triangle_colors)))
         {
-            VK_LOG_ERROR("Renderer::createVertexBuffers failed to create device-local buffer for vertex colors");
+            VK_LOG_ERROR("Triangle::createVertexBuffers failed to create device-local buffer for vertex colors");
             return false;
         }
         
-        VK_LOG_DEBUG("Renderer::createVertexBuffers successful");
+        VK_LOG_DEBUG("Triangle::createVertexBuffers successful");
         return true;
     }
 
-    bool Renderer::createUniformBuffers() noexcept
+    bool Triangle::createUniformBuffers(const VulkanDevice& device) noexcept
     {
         // allocate space for vectors per swapchain image
         m_uniformBuffers.resize(m_swapchainImageCount);
@@ -384,38 +399,38 @@ namespace keplar
             bufferCreateInfo.size = bufferSize;
 
             // create host-visible buffer for uniform data
-            if (!m_uniformBuffers[i].createHostVisible(m_vulkanDevice, bufferCreateInfo, nullptr, 0, true))
+            if (!m_uniformBuffers[i].createHostVisible(device, bufferCreateInfo, nullptr, 0, true))
             {
-                VK_LOG_ERROR("Renderer::createUniformBuffers failed to create host visible buffer for uniform data");
+                VK_LOG_ERROR("Triangle::createUniformBuffers failed to create host visible buffer for uniform data");
                 return false;
             }
         }
 
-        VK_LOG_DEBUG("Renderer::createUniformBuffers successful");
+        VK_LOG_DEBUG("Triangle::createUniformBuffers successful");
         return true;
     }
 
-    bool Renderer::createShaderModules() noexcept
+    bool Triangle::createShaderModules() noexcept
     {
         // create vertex shader module from SPIR-V
         if (!m_vertexShader.initialize(m_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, "passthrough.vert.spv"))
         {
-            VK_LOG_ERROR("Renderer::createShaderModules failed for vertex shader");
+            VK_LOG_ERROR("Triangle::createShaderModules failed for vertex shader");
             return false;
         }
 
         // create fragment shader module from SPIR-V
         if (!m_fragmentShader.initialize(m_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, "passthrough.frag.spv"))
         {
-            VK_LOG_ERROR("Renderer::createShaderModules failed for fragment shader");
+            VK_LOG_ERROR("Triangle::createShaderModules failed for fragment shader");
             return false;
         }
 
-        VK_LOG_DEBUG("Renderer::createShaderModules successful");
+        VK_LOG_DEBUG("Triangle::createShaderModules successful");
         return true;
     }
 
-    bool Renderer::createDescriptorSetLayouts() noexcept
+    bool Triangle::createDescriptorSetLayouts() noexcept
     {
         // binding: 0, type: uniform buffer
         VkDescriptorSetLayoutBinding binding{};
@@ -436,15 +451,15 @@ namespace keplar
         // create descriptor set layout
         if (!m_descriptorSetLayout.initialize(m_vkDevice, descriptorSetlayoutInfo))
         {
-            VK_LOG_ERROR("Renderer::createDescriptorSetLayouts failed to create descriptor set layout");
+            VK_LOG_ERROR("Triangle::createDescriptorSetLayouts failed to create descriptor set layout");
             return false;
         }
 
-        VK_LOG_DEBUG("Renderer::createDescriptorSetLayouts successful");
+        VK_LOG_DEBUG("Triangle::createDescriptorSetLayouts successful");
         return true;
     }
 
-    bool Renderer::createDescriptorPool() noexcept
+    bool Triangle::createDescriptorPool() noexcept
     {
         // descriptor pool size info
         VkDescriptorPoolSize descriptorPoolSize{};
@@ -463,15 +478,15 @@ namespace keplar
         // create vulkan descriptor pool
         if (!m_descriptorPool.initialize(m_vkDevice, descriptorPoolInfo))
         {
-            VK_LOG_ERROR("Renderer::createDescriptorPool failed");
+            VK_LOG_ERROR("Triangle::createDescriptorPool failed");
             return false;
         }
 
-        VK_LOG_DEBUG("Renderer::createDescriptorPool successful");
+        VK_LOG_DEBUG("Triangle::createDescriptorPool successful");
         return true;
     }
 
-    bool Renderer::createDescriptorSets() noexcept
+    bool Triangle::createDescriptorSets() noexcept
     {
         // create identical descriptor set layouts for each swapchain image
         std::vector<VkDescriptorSetLayout> layouts(m_swapchainImageCount, m_descriptorSetLayout.get());
@@ -519,11 +534,11 @@ namespace keplar
             vkUpdateDescriptorSets(m_vkDevice, 1, &descriptorWrite, 0, nullptr);
         }
 
-        VK_LOG_DEBUG("Renderer::createDescriptorSets successful");
+        VK_LOG_DEBUG("Triangle::createDescriptorSets successful");
         return true;
     }
 
-    bool Renderer::createRenderPasses() noexcept
+    bool Triangle::createRenderPasses() noexcept
     {
         // check if msaa is enabled
         const bool msaaEnabled = m_sampleCount > VK_SAMPLE_COUNT_1_BIT;
@@ -531,7 +546,7 @@ namespace keplar
         // color attachment: description, reference, subpass dependency
         VkAttachmentDescription colorAttachment{};
         colorAttachment.flags            = 0;
-        colorAttachment.format           = m_vulkanSwapchain.getColorFormat();
+        colorAttachment.format           = m_swapchain->getColorFormat();
         colorAttachment.samples          = m_sampleCount;
         colorAttachment.loadOp           = VK_ATTACHMENT_LOAD_OP_CLEAR;
         colorAttachment.storeOp          = msaaEnabled ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE;
@@ -556,7 +571,7 @@ namespace keplar
         // depth attachment: description, reference, subpass dependency
         VkAttachmentDescription depthAttachment{};
         depthAttachment.flags            = 0;
-        depthAttachment.format           = m_vulkanSwapchain.getDepthFormat();
+        depthAttachment.format           = m_swapchain->getDepthFormat();
         depthAttachment.samples          = m_sampleCount;                   
         depthAttachment.loadOp           = VK_ATTACHMENT_LOAD_OP_CLEAR;            
         depthAttachment.storeOp          = VK_ATTACHMENT_STORE_OP_STORE;             
@@ -616,15 +631,15 @@ namespace keplar
         // setup render pass 
         if (!m_renderPass.initialize(m_vkDevice, attachments, subpasses, dependencies))
         {
-            VK_LOG_ERROR("Renderer::createRenderPasses failed to initialize render pass");
+            VK_LOG_ERROR("Triangle::createRenderPasses failed to initialize render pass");
             return false;
         }
 
-        VK_LOG_DEBUG("Renderer::createRenderPasses successful");
+        VK_LOG_DEBUG("Triangle::createRenderPasses successful");
         return true;
     }
 
-    bool Renderer::createGraphicsPipeline() noexcept
+    bool Triangle::createGraphicsPipeline() noexcept
     {
         // vertex input bindings
         VkVertexInputBindingDescription vertexBindings[2]{};
@@ -672,7 +687,7 @@ namespace keplar
         inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
         // viewport and scissor state
-        auto swapchainExtent = m_vulkanSwapchain.getExtent();
+        auto swapchainExtent = m_swapchain->getExtent();
 
         VkViewport viewport{};
         viewport.x = 0.0f;
@@ -759,22 +774,22 @@ namespace keplar
         // create graphics pipeline
         if (!m_graphicsPipeline.initialize(m_vkDevice, pipelineConfig))
         {
-            VK_LOG_ERROR("Renderer::createGraphicsPipeline failed");
+            VK_LOG_ERROR("Triangle::createGraphicsPipeline failed");
             return false;
         }
 
-        VK_LOG_DEBUG("Renderer::createGraphicsPipeline successful");
+        VK_LOG_DEBUG("Triangle::createGraphicsPipeline successful");
         return true;
     }
 
-    bool Renderer::createFramebuffers() noexcept
+    bool Triangle::createFramebuffers() noexcept
     {
         // allocate framebuffer for each swapchain image
         m_framebuffers.resize(m_swapchainImageCount);
 
         // get swapchain properties
-        const auto swapchainImageViews = m_vulkanSwapchain.getColorImageViews();
-        const auto swapchainExtent     = m_vulkanSwapchain.getExtent();
+        const auto swapchainImageViews = m_swapchain->getColorImageViews();
+        const auto swapchainExtent     = m_swapchain->getExtent();
         const auto msaaEnabled         = m_sampleCount > VK_SAMPLE_COUNT_1_BIT;
 
         // prefetch attachments
@@ -787,7 +802,7 @@ namespace keplar
         }
         else 
         {
-            depthImageView  = m_vulkanSwapchain.getDepthImageView();
+            depthImageView  = m_swapchain->getDepthImageView();
         }
 
         // framebuffer attachments: color, resolve, depth
@@ -826,16 +841,16 @@ namespace keplar
             // initialize framebuffer 
             if (!m_framebuffers[i].initialize(m_vkDevice, framebufferCreateInfo))
             {
-                VK_LOG_ERROR("Renderer::createFramebuffers failed at swapchain image index %u", i);
+                VK_LOG_ERROR("Triangle::createFramebuffers failed at swapchain image index %u", i);
                 return false;
             }
         }
 
-        VK_LOG_DEBUG("Renderer::createFramebuffers successful");
+        VK_LOG_DEBUG("Triangle::createFramebuffers successful");
         return true;
     }
 
-    bool Renderer::createSyncPrimitives() noexcept
+    bool Triangle::createSyncPrimitives() noexcept
     {
         // allocate sync primitives for each frame in flight
         m_frameSyncPrimitives.resize(m_maxFramesInFlight);
@@ -860,30 +875,30 @@ namespace keplar
             // setup image available semaphore
             if (!frameSync.mImageAvailableSemaphore.initialize(m_vkDevice, semaphoreCreateInfo))
             {
-                VK_LOG_ERROR("Renderer::createSyncPrimitives failed to initialize image available semaphore : %u", i);
+                VK_LOG_ERROR("Triangle::createSyncPrimitives failed to initialize image available semaphore : %u", i);
                 return false;
             }
 
             // setup render complete semaphore
             if (!frameSync.mRenderCompleteSemaphore.initialize(m_vkDevice, semaphoreCreateInfo))
             {
-                VK_LOG_ERROR("Renderer::createSyncPrimitives failed to initialize render complete semaphore : %u", i);
+                VK_LOG_ERROR("Triangle::createSyncPrimitives failed to initialize render complete semaphore : %u", i);
                 return false;
             }
 
             // setup in flight fence for command buffer execution
             if (!frameSync.mInFlightFence.initialize(m_vkDevice, fenceCreateInfo))
             {
-                VK_LOG_ERROR("Renderer::createSyncPrimitives failed to initialize fence : %u", i);
+                VK_LOG_ERROR("Triangle::createSyncPrimitives failed to initialize fence : %u", i);
                 return false;
             }
         }
 
-        VK_LOG_DEBUG("Renderer::createSyncPrimitives successful");
+        VK_LOG_DEBUG("Triangle::createSyncPrimitives successful");
         return true;
     }
 
-    bool Renderer::buildCommandBuffers() noexcept
+    bool Triangle::buildCommandBuffers() noexcept
     {
         // check if msaa is enabled
         const bool msaaEnabled = m_sampleCount > VK_SAMPLE_COUNT_1_BIT;
@@ -908,7 +923,7 @@ namespace keplar
         renderPassBeginInfo.pNext = nullptr;
         renderPassBeginInfo.renderPass = m_renderPass.get();
         renderPassBeginInfo.renderArea.offset = {0, 0};
-        renderPassBeginInfo.renderArea.extent = m_vulkanSwapchain.getExtent();
+        renderPassBeginInfo.renderArea.extent = m_swapchain->getExtent();
         renderPassBeginInfo.clearValueCount = msaaEnabled ? 3 : 2;
         renderPassBeginInfo.pClearValues = clearValues;
 
@@ -945,21 +960,26 @@ namespace keplar
             }
         }
 
-        VK_LOG_DEBUG("Renderer::buildCommandBuffers successful");
+        VK_LOG_DEBUG("Triangle::buildCommandBuffers successful");
         return true;
     }
 
-    bool Renderer::updateUniformBuffer() noexcept
+    bool Triangle::updateUniformBuffer() noexcept
     {
+        // calculate aspect ratio of window
+        const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
+
+        // setup uniform data
         ubo::FrameData& frameData = m_uboFrameData[m_currentImageIndex];
         frameData.model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
-        frameData.view = m_camera->getViewMatrix();
-        frameData.projection = m_camera->getProjectionMatrix();
+        frameData.view = glm::mat4(1.0f);
+        frameData.projection = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
+        frameData.projection[1][1] *= -1.0f;
 
         // upload to uniform buffer
         if (!m_uniformBuffers[m_currentImageIndex].uploadHostVisible(&frameData, sizeof(frameData)))
         {
-            VK_LOG_ERROR("Renderer::updateUniformBuffers failed for frame: %d", m_currentImageIndex);
+            VK_LOG_ERROR("Triangle::updateUniformBuffers failed for frame: %d", m_currentImageIndex);
             return false;
         }
         

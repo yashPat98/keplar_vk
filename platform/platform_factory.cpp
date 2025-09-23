@@ -15,12 +15,12 @@
 namespace keplar::platform
 {
     // factory function that returns the platform-specific instance
-    std::unique_ptr<Platform> createPlatform()
+    std::shared_ptr<Platform> createPlatform()
     {
         #ifdef _WIN32
-            return std::make_unique<Win32Platform>();
+            return std::make_shared<Win32Platform>();
         #elif defined(__linux__)
-            return std::make_unique<X11Platform>();
+            return std::make_shared<X11Platform>();
         #endif
     }
 }   // namespace keplar

@@ -23,8 +23,8 @@ namespace keplar
             EventManager& operator=(const EventManager&) = delete;
 
             // listener management
-            void addListener(EventListener* listener) noexcept;
-            void removeListener(EventListener* listener) noexcept;
+            void addListener(const std::shared_ptr<EventListener>& listener) noexcept;
+            void removeListener(const std::shared_ptr<EventListener>& listener) noexcept;
             void removeAllListeners() noexcept;
 
             // window events
@@ -44,10 +44,10 @@ namespace keplar
 
         private:
             // returns a snapshot of the current listeners for safe, lock-free dispatch
-            std::vector<EventListener*> getListenerSnapshot() const noexcept;
+            std::vector<std::weak_ptr<EventListener>> getListenerSnapshot() const noexcept;
 
         private:    
             mutable std::mutex m_mutex;
-            std::vector<EventListener*> m_listeners;
+            std::vector<std::weak_ptr<EventListener>> m_listeners;
     };
 }   // namespace keplar

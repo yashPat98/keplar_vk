@@ -15,7 +15,7 @@ namespace keplar
     {
         public:    
             // creation and destruction
-            static std::unique_ptr<VulkanSurface> create(const VulkanInstance& instance, const Platform& platform) noexcept;
+            static std::shared_ptr<VulkanSurface> create(const VulkanInstance& instance, const Platform& platform) noexcept;
             ~VulkanSurface();
 
             // disable copy and move semantics to enforce unique ownership

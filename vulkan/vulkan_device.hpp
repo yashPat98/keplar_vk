@@ -46,7 +46,7 @@ namespace keplar
     {
         public:
             // creation and destruction
-            static std::unique_ptr<VulkanDevice> create(const VulkanInstance& instance, 
+            static std::shared_ptr<VulkanDevice> create(const VulkanInstance& instance, 
                                                         const VulkanSurface& surface, 
                                                         const VulkanContextConfig& config) noexcept;
             ~VulkanDevice();

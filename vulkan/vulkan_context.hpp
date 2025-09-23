@@ -31,9 +31,9 @@ namespace keplar
             VulkanContext& operator=(VulkanContext&&) = delete;
 
             // accessors return const references to wrappers; guaranteed to be initialized.
-            const VulkanInstance& getInstance() const noexcept { return *m_vulkanInstance; }
-            const VulkanSurface& getSurface() const noexcept { return *m_vulkanSurface; }
-            const VulkanDevice& getDevice() const noexcept { return *m_vulkanDevice; }
+            std::weak_ptr<VulkanInstance> getInstance() const noexcept { return m_vulkanInstance; }
+            std::weak_ptr<VulkanSurface> getSurface() const noexcept { return m_vulkanSurface; }
+            std::weak_ptr<VulkanDevice> getDevice() const noexcept { return m_vulkanDevice; }
 
         private:
             // only accessible by builder for controlled construction and initialization
@@ -41,9 +41,9 @@ namespace keplar
             bool initialize(const Platform& platform, const VulkanContextConfig& config) noexcept;
 
         private:
-            std::unique_ptr<VulkanInstance> m_vulkanInstance;
-            std::unique_ptr<VulkanSurface> m_vulkanSurface;
-            std::unique_ptr<VulkanDevice> m_vulkanDevice;
+            std::shared_ptr<VulkanInstance> m_vulkanInstance;
+            std::shared_ptr<VulkanSurface>  m_vulkanSurface;
+            std::shared_ptr<VulkanDevice>   m_vulkanDevice;
     };
 
     class VulkanContext::Builder
@@ -58,14 +58,14 @@ namespace keplar
             Builder& operator=(Builder&&) = delete;
 
             // set required dependencies for vulkan context construction
-            Builder& withPlatform(const Platform& platform) noexcept;
+            Builder& withPlatform(const std::shared_ptr<Platform>& platform) noexcept;
             Builder& withConfig(const VulkanContextConfig& config) noexcept;
 
             // builds vulkan context based on provided configuration
-            std::unique_ptr<VulkanContext> build();
+            std::shared_ptr<VulkanContext> build();
 
         private:
-            const Platform* m_platform;
+            std::shared_ptr<Platform> m_platform;
             std::optional<VulkanContextConfig> m_config;
     };
 }   // namespace keplar

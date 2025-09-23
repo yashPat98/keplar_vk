@@ -19,9 +19,9 @@ namespace
 
 namespace keplar
 {
-    std::unique_ptr<VulkanInstance> VulkanInstance::create(const VulkanContextConfig& config) noexcept
+    std::shared_ptr<VulkanInstance> VulkanInstance::create(const VulkanContextConfig& config) noexcept
     {
-        std::unique_ptr<VulkanInstance> instance(new VulkanInstance);
+        std::shared_ptr<VulkanInstance> instance(new VulkanInstance);
         if (!instance->initialize(config))
         {
             return nullptr;

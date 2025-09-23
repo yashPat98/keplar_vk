@@ -25,23 +25,52 @@ endif()
 find_package(Vulkan REQUIRED)
 
 # ───────────────────────────────────────────────
+# Sample Selection
+# ───────────────────────────────────────────────
+set(KEPLAR_SAMPLES
+    TRIANGLE
+    TEXTURE
+)
+
+if(NOT DEFINED KEPLAR_SAMPLE)
+    message(FATAL_ERROR
+        "❌ No sample selected.\n"
+        "Please configure with one of the following flags:\n"
+        "  -DKEPLAR_SAMPLE=TRIANGLE   # Build the Triangle sample\n"
+        "  -DKEPLAR_SAMPLE=TEXTURE    # Build the Texture sample\n"
+    )
+endif()
+
+string(TOUPPER "${KEPLAR_SAMPLE}" KEPLAR_SAMPLE_UPPER)
+string(TOLOWER "${KEPLAR_SAMPLE}" KEPLAR_SAMPLE_LOWER)
+
+list(FIND KEPLAR_SAMPLES "${KEPLAR_SAMPLE_UPPER}" SAMPLE_INDEX)
+
+if(SAMPLE_INDEX EQUAL -1)
+    string(JOIN "\n    " ALLOWED_SAMPLES ${KEPLAR_SAMPLES})
+    message(FATAL_ERROR
+        "❌ Invalid sample: ${KEPLAR_SAMPLE}\n"
+        "Allowed values are:\n    ${ALLOWED_SAMPLES}\n"
+    )
+endif()
+
+# ───────────────────────────────────────────────
 # Source Files
 # ───────────────────────────────────────────────
-file(GLOB_RECURSE CORE_SRC     CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/core/*.cpp ${CMAKE_SOURCE_DIR}/core/*.hpp)
+file(GLOB_RECURSE CORE_SRC     CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/core/*.cpp     ${CMAKE_SOURCE_DIR}/core/*.hpp)
 file(GLOB_RECURSE PLATFORM_SRC CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/platform/*.cpp ${CMAKE_SOURCE_DIR}/platform/*.hpp)
-file(GLOB_RECURSE UTILS_SRC    CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/utils/*.cpp ${CMAKE_SOURCE_DIR}/utils/*.hpp)
-file(GLOB_RECURSE VULKAN_SRC   CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/vulkan/*.cpp ${CMAKE_SOURCE_DIR}/vulkan/*.hpp)
-file(GLOB_RECURSE RENDERER_SRC CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/renderer/*.cpp ${CMAKE_SOURCE_DIR}/renderer/*.hpp)
-
-set(MAIN_SRC ${CMAKE_SOURCE_DIR}/main.cpp)
+file(GLOB_RECURSE UTILS_SRC    CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/utils/*.cpp    ${CMAKE_SOURCE_DIR}/utils/*.hpp)
+file(GLOB_RECURSE VULKAN_SRC   CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/vulkan/*.cpp   ${CMAKE_SOURCE_DIR}/vulkan/*.hpp)
+file(GLOB_RECURSE GRAPHICS_SRC CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/graphics/*.cpp ${CMAKE_SOURCE_DIR}/graphics/*.hpp)
+file(GLOB_RECURSE SAMPLE_SRC   CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/samples/${KEPLAR_SAMPLE_LOWER}/*)
 
 set(KEPLAR_SRC
-    ${MAIN_SRC}
+    ${SAMPLE_SRC}
     ${CORE_SRC}
     ${PLATFORM_SRC}
     ${UTILS_SRC}
     ${VULKAN_SRC}
-    ${RENDERER_SRC}
+    ${GRAPHICS_SRC}
 )
 
 # ───────────────────────────────────────────────
@@ -87,8 +116,8 @@ source_group(TREE ${CMAKE_SOURCE_DIR}/core     PREFIX "core"     FILES ${CORE_SR
 source_group(TREE ${CMAKE_SOURCE_DIR}/platform PREFIX "platform" FILES ${PLATFORM_SRC})
 source_group(TREE ${CMAKE_SOURCE_DIR}/utils    PREFIX "utils"    FILES ${UTILS_SRC})
 source_group(TREE ${CMAKE_SOURCE_DIR}/vulkan   PREFIX "vulkan"   FILES ${VULKAN_SRC})
-source_group(TREE ${CMAKE_SOURCE_DIR}/renderer PREFIX "renderer" FILES ${RENDERER_SRC})
-source_group("" FILES ${MAIN_SRC})
+source_group(TREE ${CMAKE_SOURCE_DIR}/graphics PREFIX "graphics" FILES ${GRAPHICS_SRC})
+source_group(TREE ${CMAKE_SOURCE_DIR}/samples/${KEPLAR_SAMPLE_LOWER} PREFIX "${KEPLAR_SAMPLE_LOWER}" FILES ${SAMPLE_SRC})
 
 # ───────────────────────────────────────────────
 # Windows Executable Flags

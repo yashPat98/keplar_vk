@@ -13,12 +13,13 @@ namespace keplar
     class VulkanContext;
     class VulkanSurface;
     class VulkanDevice;
+    struct QueueFamilyIndices;
 
     class VulkanSwapchain final 
     {
         public:
             // creation and destruction
-            VulkanSwapchain(const VulkanContext& context) noexcept;
+            VulkanSwapchain(std::weak_ptr<VulkanSurface> surface, std::weak_ptr<VulkanDevice> device) noexcept;
             ~VulkanSwapchain();
 
             // disable copy and move semantics to enforce unique ownership
@@ -47,20 +48,20 @@ namespace keplar
 
         private:
             // initialization helpers
-            bool chooseSurfaceFormat() noexcept;
-            bool choosePresentMode() noexcept;
+            bool chooseSurfaceFormat(const VulkanSurface& surface, const VulkanDevice& device) noexcept;
+            bool choosePresentMode(const VulkanSurface& surface, const VulkanDevice& device) noexcept;
             void chooseImageCount(const VkSurfaceCapabilitiesKHR& surfaceCapabilities) noexcept;
             void chooseSwapExtent(const VkSurfaceCapabilitiesKHR& surfaceCapabilities, VkExtent2D windowExtent) noexcept;
             void choosePreTransform(const VkSurfaceCapabilitiesKHR& surfaceCapabilities) noexcept;
-            bool createSwapchain(VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE) noexcept;
+            bool createSwapchain(VkSurfaceKHR vkSurface, QueueFamilyIndices indices, VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE) noexcept;
             bool createColorAttachment() noexcept;
-            bool createDepthAttachment() noexcept;
+            bool createDepthAttachment(const VulkanDevice& device) noexcept;
             void destroyAttachments() noexcept;
 
         private:
             // dependencies
-            const VulkanDevice&  m_device;
-            const VulkanSurface& m_surface;
+            std::weak_ptr<VulkanSurface> m_surface;
+            std::weak_ptr<VulkanDevice>  m_device;
 
             // vulkan handles
             VkDevice        m_vkDevice;

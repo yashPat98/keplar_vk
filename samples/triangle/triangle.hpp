@@ -1,16 +1,16 @@
 // ────────────────────────────────────────────
-//  File: renderer.hpp · Created by Yash Patel · 7-24-2025
+//  File: triangle.hpp · Created by Yash Patel · 9-21-2025
 // ────────────────────────────────────────────
 
-#pragma once
+#pragma once 
 
 #include <vector>
 #include <atomic>
 
-#include "platform/event_listener.hpp"
-#include "utils/thread_pool.hpp"
+#include "graphics/renderer.hpp"
+#include "graphics/common.hpp"
 
-#include "vulkan/vulkan_context.hpp"
+#include "platform/platform.hpp"
 #include "vulkan/vulkan_device.hpp"
 #include "vulkan/vulkan_swapchain.hpp"
 #include "vulkan/vulkan_command_pool.hpp"
@@ -24,44 +24,33 @@
 #include "vulkan/vulkan_descriptor_set_layout.hpp"
 #include "vulkan/vulkan_descriptor_pool.hpp"
 #include "vulkan/vulkan_pipeline.hpp"
-
-#include "msaa_target.hpp"
+#include "graphics/msaa_target.hpp"
 #include "shader_structs.hpp"
-#include "camera.hpp"
 
 namespace keplar
 {
-    class Renderer final : public EventListener
+    class Triangle : public Renderer
     {
         public:
             // creation and destruction
-            explicit Renderer(const VulkanContext& context, uint32_t winWidth, uint32_t winHeight) noexcept;
-            ~Renderer();
+            Triangle() noexcept;
+            ~Triangle();
 
-            // disable copy and move semantics to enforce unique ownership
-            Renderer(const Renderer&) = delete;
-            Renderer& operator=(const Renderer&) = delete;
-            Renderer(Renderer&&) = delete;
-            Renderer& operator=(Renderer&&) = delete; 
-
-            // initialize vulkan resources and submit frames for rendering
-            bool initialize() noexcept;
-            bool renderFrame() noexcept;
-            bool update(float dt) noexcept;
+            // core renderer interface: initialize, update, render
+            virtual bool initialize(std::weak_ptr<Platform> platform, std::weak_ptr<VulkanContext> context) noexcept override;
+            virtual bool update(float dt) noexcept override;
+            virtual bool renderFrame() noexcept override;
 
             // handle window and user input events
             virtual void onWindowResize(uint32_t, uint32_t) override;
 
-            // accessors
-            std::shared_ptr<Camera> getCamera() const noexcept { return m_camera; }
-
         private:
             bool createSwapchain() noexcept;
-            bool createMsaaTarget() noexcept;
-            bool createCommandPool() noexcept;
+            bool createMsaaTarget(const VulkanDevice& device) noexcept;
+            bool createCommandPool(const VulkanDevice& device) noexcept;
             bool createCommandBuffers() noexcept;
-            bool createVertexBuffers() noexcept;
-            bool createUniformBuffers() noexcept;
+            bool createVertexBuffers(const VulkanDevice& device) noexcept;
+            bool createUniformBuffers(const VulkanDevice& device) noexcept;
             bool createShaderModules() noexcept;
             bool createDescriptorSetLayouts() noexcept;
             bool createDescriptorPool() noexcept;
@@ -72,7 +61,7 @@ namespace keplar
             bool createSyncPrimitives() noexcept;
             bool buildCommandBuffers() noexcept;
             bool updateUniformBuffer() noexcept;
-
+            
         private:
             // per frame sync primitives
             struct FrameSyncPrimitives
@@ -82,15 +71,13 @@ namespace keplar
                 VulkanFence      mInFlightFence;
             };
 
-            // dedicated thread pool 
-            ThreadPool                          m_threadPool;
-
             // core dependencies
-            const VulkanContext&                m_vulkanContext;
-            const VulkanDevice&                 m_vulkanDevice;
-            
+            std::weak_ptr<Platform>             m_platform;
+            std::weak_ptr<VulkanContext>        m_context;
+            std::weak_ptr<VulkanDevice>         m_device;
+
             // swapchain for presentation
-            VulkanSwapchain                     m_vulkanSwapchain;   
+            std::unique_ptr<VulkanSwapchain>    m_swapchain;   
 
             // vulkan handles
             VkDevice                            m_vkDevice;
@@ -135,8 +122,5 @@ namespace keplar
             // descriptor sets and UBOs
             std::vector<VkDescriptorSet>        m_descriptorSets;
             std::vector<ubo::FrameData>         m_uboFrameData;
-
-            // main camera
-            std::shared_ptr<Camera>             m_camera;
     };
 }   // namespace keplar

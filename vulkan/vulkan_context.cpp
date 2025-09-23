@@ -53,9 +53,9 @@ namespace keplar
 
     // ─────────────── VulkanContext::Builder ───────────────
 
-    VulkanContext::Builder& VulkanContext::Builder::withPlatform(const Platform& platform) noexcept
+    VulkanContext::Builder& VulkanContext::Builder::withPlatform(const std::shared_ptr<Platform>& platform) noexcept
     {
-        m_platform = &platform;
+        m_platform = platform;
         return *this;
     }
 
@@ -65,7 +65,7 @@ namespace keplar
         return *this;
     }
 
-    std::unique_ptr<VulkanContext> VulkanContext::Builder::build()
+    std::shared_ptr<VulkanContext> VulkanContext::Builder::build()
     {
         // context requires a valid platform
         if (!m_platform)
@@ -95,7 +95,7 @@ namespace keplar
         }
 
         // create and initialize context
-        auto vulkanContext = std::unique_ptr<VulkanContext>(new VulkanContext);
+        auto vulkanContext = std::shared_ptr<VulkanContext>(new VulkanContext);
         if (!vulkanContext->initialize(*m_platform, config))
         {
             VK_LOG_FATAL("VulkanContext::Builder::build : failed to build VulkanContext");

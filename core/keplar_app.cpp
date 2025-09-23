@@ -11,7 +11,7 @@
 #include "platform/platform_factory.hpp"
 #include "vulkan/vulkan_context.hpp"
 #include "vulkan/vulkan_utils.hpp"
-#include "renderer/renderer.hpp"
+#include "graphics/renderer.hpp"
 #include "utils/logger.hpp"
 
 namespace keplar
@@ -28,12 +28,20 @@ namespace keplar
         shutdown();
     }
 
-    bool KeplarApp::initialize() noexcept
+    bool KeplarApp::initialize(std::unique_ptr<Renderer> renderer) noexcept
     {
+        // acquire renderer
+        m_renderer = std::move(renderer);
+        if (!m_renderer) 
+        {
+            VK_LOG_ERROR("KeplarApp::initialize failed: renderer is null");
+            return false;
+        }
+
         // high-level orchestration of subsystem creation
-        if (!createPlatform())   { return false; }
-        if (!createContext())    { return false; }
-        if (!createRenderer())   { return false; }
+        if (!initializePlatform())   { return false; }
+        if (!initializeContext())    { return false; }
+        if (!initializeRenderer())   { return false; }
 
         VK_LOG_INFO("KeplarApp::initialize successful");
         return true;
@@ -68,13 +76,12 @@ namespace keplar
     void KeplarApp::shutdown() noexcept
     {
         // teardown subsystems in reverse order
-        m_platform->removeListener(m_renderer.get());
         m_renderer.reset();
         m_vulkanContext.reset();
         m_platform.reset();
     }
 
-    bool KeplarApp::createPlatform() noexcept
+    bool KeplarApp::initializePlatform() noexcept
     {
         // create platform-specific implementation
         m_platform = platform::createPlatform();
@@ -94,7 +101,7 @@ namespace keplar
         return true;
     }
 
-    bool KeplarApp::createContext() noexcept
+    bool KeplarApp::initializeContext() noexcept
     {
         // prepare vulkan configuration
         VulkanContextConfig config{};
@@ -109,36 +116,29 @@ namespace keplar
 
         // build vulkan context using platform and config
         m_vulkanContext = VulkanContext::Builder()
-                            .withPlatform(*m_platform)
+                            .withPlatform(m_platform)
                             .withConfig(config)
                             .build();
         if (!m_vulkanContext)
         {
-            VK_LOG_DEBUG("Failed to create vulkan context");
+            VK_LOG_DEBUG("Failed to initialize vulkan context");
             return false;
         }
 
         return true;
     }
 
-    bool KeplarApp::createRenderer() noexcept
+    bool KeplarApp::initializeRenderer() noexcept
     {
-        // query current window dimensions
-        uint32_t width  = m_platform->getWindowWidth();
-        uint32_t height = m_platform->getWindowHeight();
-
         // create and initialize renderer
-        m_renderer = std::make_unique<Renderer>(*m_vulkanContext, width, height);
-        if (!m_renderer->initialize())
+        if (!m_renderer->initialize(m_platform, m_vulkanContext))
         {
             VK_LOG_DEBUG("Failed to initialize renderer");
             return false;
         }
 
-        // register renderer and camera as event listener
-        m_platform->addListener(m_renderer.get());
-        m_platform->addListener(m_renderer->getCamera().get());
-
+        // register renderer as event listener
+        m_platform->addListener(m_renderer);
         return true;
     }
 
