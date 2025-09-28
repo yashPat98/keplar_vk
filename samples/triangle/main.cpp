@@ -9,22 +9,17 @@
 int main([[maybe_unused]]int argc, [[maybe_unused]] char* argv[])
 {
     // start the logging thread early
-    auto& logger = keplar::Logger::getInstance();
+    keplar::Logger::getInstance();
 
-    // app init 
+    // create and initialize app
     keplar::KeplarApp app;
     if (!app.initialize(std::make_unique<keplar::Triangle>()))
     {
         VK_LOG_FATAL("failed to initialize Keplar application");
-        logger.terminate();
         return EXIT_FAILURE;
     }
 
-    // run the main loop
-    const int exitCode = app.run();
-
-    // clean up logging thread 
-    logger.terminate();
-    return exitCode;
+    // run thr main loop until app exit
+    return app.run();
 }
 

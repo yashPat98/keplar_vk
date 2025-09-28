@@ -413,14 +413,14 @@ namespace keplar
     bool Triangle::createShaderModules() noexcept
     {
         // create vertex shader module from SPIR-V
-        if (!m_vertexShader.initialize(m_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, "passthrough.vert.spv"))
+        if (!m_vertexShader.initialize(m_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, "triangle/triangle.vert.spv"))
         {
             VK_LOG_ERROR("Triangle::createShaderModules failed for vertex shader");
             return false;
         }
 
         // create fragment shader module from SPIR-V
-        if (!m_fragmentShader.initialize(m_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, "passthrough.frag.spv"))
+        if (!m_fragmentShader.initialize(m_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, "triangle/triangle.frag.spv"))
         {
             VK_LOG_ERROR("Triangle::createShaderModules failed for fragment shader");
             return false;

@@ -63,14 +63,16 @@ file(GLOB_RECURSE UTILS_SRC    CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/utils/*.cpp
 file(GLOB_RECURSE VULKAN_SRC   CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/vulkan/*.cpp   ${CMAKE_SOURCE_DIR}/vulkan/*.hpp)
 file(GLOB_RECURSE GRAPHICS_SRC CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/graphics/*.cpp ${CMAKE_SOURCE_DIR}/graphics/*.hpp)
 file(GLOB_RECURSE SAMPLE_SRC   CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/samples/${KEPLAR_SAMPLE_LOWER}/*)
+file(GLOB_RECURSE SHADERS_SRC  CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/shaders/${KEPLAR_SAMPLE_LOWER}/*)
 
 set(KEPLAR_SRC
-    ${SAMPLE_SRC}
     ${CORE_SRC}
     ${PLATFORM_SRC}
     ${UTILS_SRC}
     ${VULKAN_SRC}
     ${GRAPHICS_SRC}
+    ${SAMPLE_SRC}
+    ${SHADERS_SRC}
 )
 
 # ───────────────────────────────────────────────
@@ -92,6 +94,7 @@ endif()
 include_directories(
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/external/glm
+    ${CMAKE_SOURCE_DIR}/external/tinygltf
 )
 
 # ───────────────────────────────────────────────
@@ -118,6 +121,7 @@ source_group(TREE ${CMAKE_SOURCE_DIR}/utils    PREFIX "utils"    FILES ${UTILS_S
 source_group(TREE ${CMAKE_SOURCE_DIR}/vulkan   PREFIX "vulkan"   FILES ${VULKAN_SRC})
 source_group(TREE ${CMAKE_SOURCE_DIR}/graphics PREFIX "graphics" FILES ${GRAPHICS_SRC})
 source_group(TREE ${CMAKE_SOURCE_DIR}/samples/${KEPLAR_SAMPLE_LOWER} PREFIX "${KEPLAR_SAMPLE_LOWER}" FILES ${SAMPLE_SRC})
+source_group(TREE ${CMAKE_SOURCE_DIR}/shaders/${KEPLAR_SAMPLE_LOWER} PREFIX "shaders" FILES ${SHADERS_SRC})
 
 # ───────────────────────────────────────────────
 # Windows Executable Flags

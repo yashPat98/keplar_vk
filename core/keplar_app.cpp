@@ -76,6 +76,7 @@ namespace keplar
     void KeplarApp::shutdown() noexcept
     {
         // teardown subsystems in reverse order
+        m_platform->removeListener(m_renderer);
         m_renderer.reset();
         m_vulkanContext.reset();
         m_platform.reset();

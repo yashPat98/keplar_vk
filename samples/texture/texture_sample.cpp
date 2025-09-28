@@ -1,0 +1,1101 @@
+// ────────────────────────────────────────────
+//  File: texture_sample.cpp · Created by Yash Patel · 9-22-2025
+// ────────────────────────────────────────────
+
+#include "texture_sample.hpp"
+#include "utils/logger.hpp"
+#include "vulkan/vulkan_utils.hpp"
+
+namespace keplar
+{
+    TextureSample::TextureSample() noexcept
+        : m_vkDevice(VK_NULL_HANDLE)
+        , m_presentQueue(VK_NULL_HANDLE)
+        , m_graphicsQueue(VK_NULL_HANDLE)
+        , m_vkSwapchainKHR(VK_NULL_HANDLE)
+        , m_windowWidth(0)
+        , m_windowHeight(0)
+        , m_sampleCount(VK_SAMPLE_COUNT_1_BIT)
+        , m_swapchainImageCount(0)
+        , m_maxFramesInFlight(0)
+        , m_currentImageIndex(0)
+        , m_currentFrameIndex(0)
+        , m_readyToRender(false)
+        , m_sampler(VK_NULL_HANDLE)
+    {
+    }
+
+    TextureSample::~TextureSample()
+    {
+        // stop any new rendering tasks from being submitted
+        m_readyToRender.store(false); 
+
+        // ensure GPU has completed all work submitted to the device
+        vkDeviceWaitIdle(m_vkDevice);
+
+        // unregister listeners from the platform
+        if (auto platform = m_platform.lock())
+        {
+            platform->removeListener(m_camera);
+        }
+
+        // destroy vulkan resources 
+        if (m_sampler != VK_NULL_HANDLE) 
+        { 
+            vkDestroySampler(m_vkDevice, m_sampler, nullptr); 
+        }
+        m_swapchain.reset();
+        m_commandPool.releaseBuffers(m_commandBuffers);
+    }
+
+    bool TextureSample::initialize(std::weak_ptr<Platform> platform, std::weak_ptr<VulkanContext> context) noexcept
+    {
+        // store non-owning references
+        m_platform = platform;
+        m_context = context;
+
+        // acquire shared access to context and platform
+        auto contextLocked = m_context.lock(); 
+        auto platformLocked = m_platform.lock();
+        if (!contextLocked || !platformLocked)
+        {
+            return false;
+        }
+
+        // store non-owning device reference and acquire shared access
+        m_device = contextLocked->getDevice();
+        auto device = m_device.lock();
+        if (!device)
+        {
+            return false;
+        }
+
+        // setup resources and cache vulkan handles
+        m_swapchain       = std::make_unique<VulkanSwapchain>(contextLocked->getSurface(), m_device);
+        m_vkDevice        = device->getDevice();
+        m_presentQueue    = device->getPresentQueue();
+        m_graphicsQueue   = device->getGraphicsQueue();
+        m_vkSwapchainKHR  = m_swapchain->get();
+        m_windowWidth     = platformLocked->getWindowWidth();
+        m_windowHeight    = platformLocked->getWindowHeight();
+
+        // initialize vulkan resources
+        if (!createSwapchain())             { return false; }
+        if (!createMsaaTarget(*device))     { return false; }
+        if (!createCommandPool(*device))    { return false; }
+        if (!createCommandBuffers())        { return false; }
+        if (!createVertexBuffers(*device))  { return false; }
+        if (!createTextures(*device))       { return false; }
+        if (!createUniformBuffers(*device)) { return false; }
+        if (!createShaderModules())         { return false; }
+        if (!createDescriptorSetLayouts())  { return false; }
+        if (!createDescriptorPool())        { return false; }
+        if (!createDescriptorSets())        { return false; }
+        if (!createRenderPasses())          { return false; }
+        if (!createGraphicsPipeline())      { return false; }
+        if (!createFramebuffers())          { return false; }
+        if (!createSyncPrimitives())        { return false; }
+        if (!buildCommandBuffers())         { return false; }
+        if (!prepareScene())                { return false; }
+
+        VK_LOG_INFO("TextureSample::initialize successful");
+        return true;
+    }
+
+    bool TextureSample::renderFrame() noexcept
+    {
+        // 1️⃣ skip frame if renderer is not ready
+        if (!m_readyToRender.load())
+        {
+            VK_LOG_DEBUG("TextureSample::renderFrame skipped: renderer not ready");
+            return true;
+        }
+
+        // 2️⃣ get sync primitives for current frame
+        auto& frameSync = m_frameSyncPrimitives[m_currentFrameIndex];
+
+        // 3️⃣ wait on the fence for this frame to ensure GPU finished work from last time
+        // This prevents CPU from submitting commands for the same frame while GPU is still using it
+        if (!frameSync.mInFlightFence.wait() || !frameSync.mInFlightFence.reset())
+        {
+            return false;
+        }
+
+        // 4️⃣ acquire next image from swapchain, signaling the image available semaphore 
+        VkResult vkResult = vkAcquireNextImageKHR(m_vkDevice, m_vkSwapchainKHR, UINT64_MAX, frameSync.mImageAvailableSemaphore.get(), VK_NULL_HANDLE, &m_currentImageIndex);
+        if (vkResult == VK_ERROR_OUT_OF_DATE_KHR || vkResult == VK_SUBOPTIMAL_KHR)
+        {
+            VK_LOG_DEBUG("vkAcquireNextImageKHR failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            onWindowResize(m_windowWidth, m_windowHeight);
+            return true;
+        }
+        else if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_FATAL("vkAcquireNextImageKHR failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            return false;
+        }
+
+        // 5️⃣ update uniform buffer for the current frame
+        updateUniformBuffer();
+
+        // 6️⃣ prepare submit info to submit command buffer with sync info
+        const VkPipelineStageFlags waitDstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        VkSemaphore waitSemaphore = frameSync.mImageAvailableSemaphore.get();
+        VkSemaphore signalSemaphore = frameSync.mRenderCompleteSemaphore.get();
+        VkCommandBuffer commandBuffer = m_commandBuffers[m_currentImageIndex].get();
+
+        // setup queue submit info
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.pNext = nullptr;
+        submitInfo.pWaitDstStageMask = &waitDstStageMask;
+        submitInfo.waitSemaphoreCount = 1;
+        submitInfo.pWaitSemaphores = &waitSemaphore;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &commandBuffer;
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores = &signalSemaphore;
+
+        // 7️⃣ submit command buffer to graphics queue with fence to track GPU work
+        if (!VK_CHECK(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, frameSync.mInFlightFence.get())))
+        {
+            return false;
+        }
+
+        // 8️⃣ prepare present info to present the rendered image
+        VkPresentInfoKHR presentInfo{};
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.pNext = nullptr;
+        presentInfo.waitSemaphoreCount = 1;
+        presentInfo.pWaitSemaphores = &signalSemaphore;
+        presentInfo.swapchainCount = 1;
+        presentInfo.pSwapchains = &m_vkSwapchainKHR;
+        presentInfo.pImageIndices = &m_currentImageIndex;
+
+        // 9️⃣ queue the present operation
+        vkResult = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+        if (vkResult == VK_ERROR_OUT_OF_DATE_KHR || vkResult == VK_SUBOPTIMAL_KHR)
+        {
+            VK_LOG_DEBUG("vkQueuePresentKHR failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            onWindowResize(m_windowWidth, m_windowHeight);
+            return true;
+        }
+        else if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_FATAL("vkQueuePresentKHR failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            return false;
+        }
+
+        // 🔟 advance to the next frame sync object (cycling through available frames in flight)
+        m_currentFrameIndex = (m_currentFrameIndex + 1) % m_maxFramesInFlight;
+        return true;
+    }
+
+    bool TextureSample::update(float dt) noexcept
+    {
+        // update camera 
+        m_camera->update(dt);
+        return true;
+    }
+
+    void TextureSample::onWindowResize(uint32_t width, uint32_t height)
+    {    
+        // window minimized or device not available: stop rendering
+        auto device = m_device.lock();
+        if (width == 0 || height == 0 || !device)
+        {
+            m_readyToRender.store(false);
+            return;
+        }
+
+        // stop rendering and wait for device to finish all operations
+        m_readyToRender.store(false);
+        vkDeviceWaitIdle(m_vkDevice);
+
+        // recreate swapchain with new dimensions
+        if (!m_swapchain->recreate(width, height))
+        {
+            return;
+        }
+
+        // store old max frames-in-flight for sync check
+        const uint32_t previousMaxFramesInFlight = m_maxFramesInFlight;
+
+        // update swapchain handle and image count
+        m_vkSwapchainKHR      = m_swapchain->get();
+        m_swapchainImageCount = m_swapchain->getImageCount();
+        m_maxFramesInFlight   = glm::min(3u, m_swapchainImageCount);
+
+        // teardown all dependent resources (framebuffers, pipeline, renderpass, command buffers)
+        for (auto& framebuffer : m_framebuffers)
+        {
+            framebuffer.destroy();
+        }
+        m_graphicsPipeline.destroy();
+        m_renderPass.destroy();
+        m_msaaTarget.destroy();
+        m_commandPool.releaseBuffers(m_commandBuffers);
+        m_commandBuffers.clear();
+
+        // recreate all dependent resources
+        if (!createMsaaTarget(*device)) { return; }
+        if (!createCommandBuffers())    { return; }
+        if (!createRenderPasses())      { return; }
+        if (!createGraphicsPipeline())  { return; }
+        if (!createFramebuffers())      { return; }
+        if (!buildCommandBuffers())     { return; }
+
+        // recreate per-frame sync primitives if max frames-in-flight changed
+        if (m_maxFramesInFlight != previousMaxFramesInFlight)
+        {
+            for (uint32_t i = 0; i < m_maxFramesInFlight; ++i)
+            {
+                auto& frameSync = m_frameSyncPrimitives[i];
+                frameSync.mInFlightFence.destroy();
+                frameSync.mRenderCompleteSemaphore.destroy();
+                frameSync.mImageAvailableSemaphore.destroy();
+            }
+            
+            if (!createSyncPrimitives()) { return; }
+        }
+
+        // update window dimensions 
+        m_windowWidth  = width;
+        m_windowHeight = height;
+
+        // resume rendering
+        m_readyToRender.store(true);
+    }
+
+    bool TextureSample::createSwapchain() noexcept
+    {
+        // setup swapchain
+        if (!m_swapchain->initialize(m_windowWidth, m_windowHeight))
+        {
+            VK_LOG_ERROR("TextureSample::createSwapchain : failed to create swapchain fpr presentation.");
+            return false;
+        }
+
+        // retrieve swapchain handle and image count
+        m_vkSwapchainKHR = m_swapchain->get();
+        m_swapchainImageCount = m_swapchain->getImageCount();
+        
+        // vulkan spec suggests max frames in flight should be less than swapchain image count
+        // to prevent CPU stalling while waiting for an image to become available for rendering.
+        // setting an upper limit of 3 balances throughput and avoids stalls.
+        m_maxFramesInFlight = glm::min(3u, m_swapchainImageCount);
+        VK_LOG_INFO("TextureSample::createSwapchain : swapchain created successfully (max frames in flight: %d)", m_maxFramesInFlight);
+        return true;
+    }
+
+    bool TextureSample::createMsaaTarget(const VulkanDevice& device) noexcept
+    {
+        // initialize msaa color and depth targets for the current swapchain
+        if (m_msaaTarget.initialize(device, *m_swapchain, VK_SAMPLE_COUNT_8_BIT))
+        {
+            // success
+            m_sampleCount = m_msaaTarget.getSampleCount();
+            VK_LOG_DEBUG("TextureSample::createMsaaTarget : msaa targets created successfully.");
+        }
+        else 
+        {
+            // fall back to no msaa
+            VK_LOG_WARN("TextureSample::createMsaaTarget : failed to create msaa color and depth targets.");
+        }
+
+        return true;
+    }
+
+    bool TextureSample::createCommandPool(const VulkanDevice& device) noexcept
+    {
+        // setup command pool for graphics queue
+        const auto graphicsFamilyIndex = device.getQueueFamilyIndices().mGraphicsFamily;
+
+        // command pool creation info
+        VkCommandPoolCreateInfo vkCommandPoolCreateInfo{};
+        vkCommandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        vkCommandPoolCreateInfo.pNext = nullptr;
+        vkCommandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        vkCommandPoolCreateInfo.queueFamilyIndex = graphicsFamilyIndex .value();
+
+        // setup command pool
+        if (!m_commandPool.initialize(m_vkDevice, vkCommandPoolCreateInfo))
+        {
+            VK_LOG_ERROR("TextureSample::createCommandPool : failed to initialize command pool.");
+            return false;
+        }
+
+        VK_LOG_DEBUG("TextureSample::createCommandPool successful");
+        return true;
+    }
+
+    bool TextureSample::createCommandBuffers() noexcept
+    {
+        // allocate primary command buffers per swapchain
+        m_commandBuffers = m_commandPool.allocateBuffers(m_swapchainImageCount, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        if (m_commandBuffers.empty())
+        {
+            VK_LOG_ERROR("TextureSample::createCommandBuffers failed to allocate command buffers.");
+            return false;
+        }
+
+        VK_LOG_DEBUG("TextureSample::createCommandBuffers successful");
+        return true;
+    }
+
+    bool TextureSample::createVertexBuffers(const VulkanDevice& device) noexcept
+    {
+        // position data 
+        float rectangle_position[] = 
+        {
+            // first triangle 
+            1.0f,  1.0f,  0.0f,       
+           -1.0f,  1.0f,  0.0f,       
+           -1.0f, -1.0f,  0.0f,       
+
+            // second triangle 
+           -1.0f, -1.0f,  0.0f,       
+            1.0f, -1.0f,  0.0f,      
+            1.0f,  1.0f,  0.0f,       
+        };
+
+        // texcoord data 
+        float rectangle_texcoord[] = 
+        {
+            // first triangle 
+            1.0f, 1.0f, 
+            0.0f, 1.0f, 
+            0.0f, 0.0f,
+
+            // second triangle
+            0.0f, 0.0f,
+            1.0f, 0.0f,
+            1.0f, 1.0f
+        };
+
+        // create device local buffer via staging buffer for upload
+        // vulkan buffer creation info
+        VkBufferCreateInfo bufferCreateInfo{};
+        bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;                                    
+        bufferCreateInfo.pNext = nullptr;                                                                    
+        bufferCreateInfo.flags = 0;                                                                                                                      
+        bufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;  
+        bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;                                        
+
+        // create rectangle position buffer
+        bufferCreateInfo.size = sizeof(rectangle_position); 
+        if (!m_positionBuffer.createDeviceLocal(device, m_commandPool, bufferCreateInfo, rectangle_position, sizeof(rectangle_position)))
+        {
+            VK_LOG_ERROR("TextureSample::createVertexBuffers failed to create device-local buffer for vertex positions");
+            return false;
+        }
+
+        // create rectangle texcoords
+        bufferCreateInfo.size = sizeof(rectangle_texcoord); 
+        if (!m_texcoordBuffer.createDeviceLocal(device, m_commandPool, bufferCreateInfo, rectangle_texcoord, sizeof(rectangle_texcoord)))
+        {
+            VK_LOG_ERROR("TextureSample::createVertexBuffers failed to create device-local buffer for vertex colors");
+            return false;
+        }
+        
+        VK_LOG_DEBUG("TextureSample::createVertexBuffers successful");
+        return true;
+    }
+
+    bool TextureSample::createTextures(const VulkanDevice& device) noexcept
+    {
+        // load texture from file
+        if (!m_texture.load(device, m_commandPool, "cloth.png", true))
+        {
+            VK_LOG_ERROR("TextureSample::createTextures failed to load texture");
+            return false;
+        }
+
+        // configure sampler parameters
+        VkSamplerCreateInfo samplerCreateInfo{};
+        samplerCreateInfo.sType                     = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        samplerCreateInfo.pNext                     = NULL;
+        samplerCreateInfo.flags                     = 0;
+        samplerCreateInfo.magFilter                 = VK_FILTER_LINEAR;
+        samplerCreateInfo.minFilter                 = VK_FILTER_LINEAR;
+        samplerCreateInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        samplerCreateInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerCreateInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerCreateInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerCreateInfo.anisotropyEnable          = VK_FALSE;
+        samplerCreateInfo.maxAnisotropy             = 16.0f;
+        samplerCreateInfo.compareEnable             = VK_FALSE;
+        samplerCreateInfo.compareOp                 = VK_COMPARE_OP_ALWAYS;
+        samplerCreateInfo.minLod                    = 0.0f;
+        samplerCreateInfo.maxLod                    = static_cast<float>(m_texture.getMipLevels());
+        samplerCreateInfo.mipLodBias                = 0.0f;
+        samplerCreateInfo.borderColor               = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+        samplerCreateInfo.unnormalizedCoordinates   = VK_FALSE;
+
+        // create vulkan sampler object
+        VkResult vkResult = vkCreateSampler(m_vkDevice, &samplerCreateInfo, NULL, &m_sampler);
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_FATAL("vkCreateSampler failed to create sampler for texture : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            return vkResult;
+        }
+
+        VK_LOG_DEBUG("TextureSample::createTextures successful");
+        return true;
+    }
+
+    bool TextureSample::createUniformBuffers(const VulkanDevice& device) noexcept
+    {
+        // allocate space for vectors per swapchain image
+        m_uniformBuffers.resize(m_swapchainImageCount);
+        m_uboFrameData.resize(m_swapchainImageCount);
+
+        // calculate required buffer size for uniform data
+        VkDeviceSize bufferSize = sizeof(ubo::FrameData);
+
+        // create a host-visible uniform buffer for each swapchain image
+        for (size_t i = 0; i < m_swapchainImageCount; i++)
+        {
+            VkBufferCreateInfo bufferCreateInfo{};
+            bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            bufferCreateInfo.pNext = nullptr;
+            bufferCreateInfo.flags = 0;
+            bufferCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+            bufferCreateInfo.size = bufferSize;
+
+            // create host-visible buffer for uniform data
+            if (!m_uniformBuffers[i].createHostVisible(device, bufferCreateInfo, nullptr, 0, true))
+            {
+                VK_LOG_ERROR("TextureSample::createUniformBuffers failed to create host visible buffer for uniform data");
+                return false;
+            }
+        }
+
+        VK_LOG_DEBUG("TextureSample::createUniformBuffers successful");
+        return true;
+    }
+
+    bool TextureSample::createShaderModules() noexcept
+    {
+        // create vertex shader module from SPIR-V
+        if (!m_vertexShader.initialize(m_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, "texture/texture.vert.spv"))
+        {
+            VK_LOG_ERROR("TextureSample::createShaderModules failed for vertex shader");
+            return false;
+        }
+
+        // create fragment shader module from SPIR-V
+        if (!m_fragmentShader.initialize(m_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, "texture/texture.frag.spv"))
+        {
+            VK_LOG_ERROR("TextureSample::createShaderModules failed for fragment shader");
+            return false;
+        }
+
+        VK_LOG_DEBUG("TextureSample::createShaderModules successful");
+        return true;
+    }
+
+    bool TextureSample::createDescriptorSetLayouts() noexcept
+    {
+        // binding: 0, type: uniform buffer
+        VkDescriptorSetLayoutBinding uboBinding{};
+        uboBinding.binding                  = 0;
+        uboBinding.descriptorType           = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uboBinding.descriptorCount          = 1;
+        uboBinding.stageFlags               = VK_SHADER_STAGE_VERTEX_BIT;
+        uboBinding.pImmutableSamplers       = nullptr;
+
+        // binding: 1, type: combined image sampler
+        VkDescriptorSetLayoutBinding samplerBinding{};
+        samplerBinding.binding              = 1;
+        samplerBinding.descriptorType       = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        samplerBinding.descriptorCount      = 1;
+        samplerBinding.stageFlags           = VK_SHADER_STAGE_FRAGMENT_BIT;
+        samplerBinding.pImmutableSamplers   = nullptr;
+
+        std::array<VkDescriptorSetLayoutBinding, 2>  bindings { uboBinding, samplerBinding };
+
+        // descriptor set layout creation info
+        VkDescriptorSetLayoutCreateInfo descriptorSetlayoutInfo{};
+        descriptorSetlayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptorSetlayoutInfo.pNext = nullptr;
+        descriptorSetlayoutInfo.flags = 0;
+        descriptorSetlayoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+        descriptorSetlayoutInfo.pBindings = bindings.data();
+
+        // create descriptor set layout
+        if (!m_descriptorSetLayout.initialize(m_vkDevice, descriptorSetlayoutInfo))
+        {
+            VK_LOG_ERROR("TextureSample::createDescriptorSetLayouts failed to create descriptor set layout");
+            return false;
+        }
+
+        VK_LOG_DEBUG("TextureSample::createDescriptorSetLayouts successful");
+        return true;
+    }
+
+    bool TextureSample::createDescriptorPool() noexcept
+    {
+        // pool size for uniform buffers
+        VkDescriptorPoolSize uboPoolSize{};
+        uboPoolSize.type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uboPoolSize.descriptorCount = 1;
+
+        // pool size for combined image samplers
+        VkDescriptorPoolSize samplerPoolSize{};
+        samplerPoolSize.type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        samplerPoolSize.descriptorCount = 1;
+
+        std::array<VkDescriptorPoolSize, 2> descriptorPoolSizes = { uboPoolSize, samplerPoolSize };
+
+        // descriptor pool creation info
+        VkDescriptorPoolCreateInfo descriptorPoolInfo{};
+        descriptorPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        descriptorPoolInfo.pNext = nullptr;
+        descriptorPoolInfo.flags = 0;
+        descriptorPoolInfo.poolSizeCount = static_cast<uint32_t>(descriptorPoolSizes.size());
+        descriptorPoolInfo.pPoolSizes = descriptorPoolSizes.data();
+        descriptorPoolInfo.maxSets = m_swapchainImageCount;
+
+        // create vulkan descriptor pool
+        if (!m_descriptorPool.initialize(m_vkDevice, descriptorPoolInfo))
+        {
+            VK_LOG_ERROR("TextureSample::createDescriptorPool failed");
+            return false;
+        }
+
+        VK_LOG_DEBUG("TextureSample::createDescriptorPool successful");
+        return true;
+    }
+
+    bool TextureSample::createDescriptorSets() noexcept
+    {
+        // create identical descriptor set layouts for each swapchain image
+        std::vector<VkDescriptorSetLayout> layouts(m_swapchainImageCount, m_descriptorSetLayout.get());
+
+        // descriptor set allocation info
+        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo{};
+        descriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        descriptorSetAllocateInfo.pNext = nullptr;
+        descriptorSetAllocateInfo.descriptorPool = m_descriptorPool.get();
+        descriptorSetAllocateInfo.descriptorSetCount = m_swapchainImageCount;
+        descriptorSetAllocateInfo.pSetLayouts = layouts.data();
+
+        // allocate descriptor sets
+        m_descriptorSets.resize(m_swapchainImageCount);
+        VkResult vkResult = vkAllocateDescriptorSets(m_vkDevice, &descriptorSetAllocateInfo, m_descriptorSets.data());
+        if (vkResult != VK_SUCCESS)
+        {
+            VK_LOG_FATAL("vkAllocateDescriptorSets failed to allocate descriptor set : %s (code: %d)", string_VkResult(vkResult), vkResult);
+            return false;
+        }
+
+        // for each swapchain image, bind its corresponding uniform buffer to the descriptor set
+        for (uint32_t i = 0; i < m_swapchainImageCount; i++)
+        {
+            // info for uniform buffer binding
+            VkDescriptorBufferInfo bufferInfo{};
+            bufferInfo.buffer   = m_uniformBuffers[i].get();
+            bufferInfo.offset   = 0;
+            bufferInfo.range    = sizeof(ubo::FrameData);
+
+            VkWriteDescriptorSet uboWrite{};
+            uboWrite.sType                  = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            uboWrite.pNext                  = nullptr;
+            uboWrite.dstSet                 = m_descriptorSets[i];
+            uboWrite.dstBinding             = 0;
+            uboWrite.dstArrayElement        = 0;
+            uboWrite.descriptorCount        = 1;
+            uboWrite.descriptorType         = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            uboWrite.pImageInfo             = nullptr;
+            uboWrite.pBufferInfo            = &bufferInfo;
+            uboWrite.pTexelBufferView       = nullptr;
+
+            // info for combined image samplers
+            VkDescriptorImageInfo imageInfo{};
+            imageInfo.imageLayout   = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfo.imageView     = m_texture.getImageView();
+            imageInfo.sampler       = m_sampler;
+
+            VkWriteDescriptorSet samplerWrite{};
+            samplerWrite.sType              = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            samplerWrite.pNext              = nullptr;
+            samplerWrite.dstSet             = m_descriptorSets[i];
+            samplerWrite.dstBinding         = 1;
+            samplerWrite.dstArrayElement    = 0;
+            samplerWrite.descriptorCount    = 1;
+            samplerWrite.descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            samplerWrite.pImageInfo         = &imageInfo;
+            samplerWrite.pBufferInfo        = nullptr;
+            samplerWrite.pTexelBufferView   = nullptr;
+
+            // commit the bindings to the descriptor set
+            std::array<VkWriteDescriptorSet, 2> writes = { uboWrite, samplerWrite };
+            vkUpdateDescriptorSets(m_vkDevice, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+        }
+
+        VK_LOG_DEBUG("TextureSample::createDescriptorSets successful");
+        return true;
+    }
+
+    bool TextureSample::createRenderPasses() noexcept
+    {
+        // check if msaa is enabled
+        const bool msaaEnabled = m_sampleCount > VK_SAMPLE_COUNT_1_BIT;
+
+        // color attachment: description, reference, subpass dependency
+        VkAttachmentDescription colorAttachment{};
+        colorAttachment.flags            = 0;
+        colorAttachment.format           = m_swapchain->getColorFormat();
+        colorAttachment.samples          = m_sampleCount;
+        colorAttachment.loadOp           = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachment.storeOp          = msaaEnabled ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE;
+        colorAttachment.stencilLoadOp    = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colorAttachment.stencilStoreOp   = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorAttachment.initialLayout    = VK_IMAGE_LAYOUT_UNDEFINED;
+        colorAttachment.finalLayout      = msaaEnabled ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+        VkAttachmentReference colorAttachmentRef{};
+        colorAttachmentRef.attachment    = 0;                                       
+        colorAttachmentRef.layout        = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;   
+
+        VkSubpassDependency colorDependency{};
+        colorDependency.srcSubpass       = VK_SUBPASS_EXTERNAL;
+        colorDependency.dstSubpass       = 0;
+        colorDependency.srcStageMask     = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        colorDependency.dstStageMask     = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        colorDependency.srcAccessMask    = 0;
+        colorDependency.dstAccessMask    = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+        colorDependency.dependencyFlags  = 0;
+
+        // depth attachment: description, reference, subpass dependency
+        VkAttachmentDescription depthAttachment{};
+        depthAttachment.flags            = 0;
+        depthAttachment.format           = m_swapchain->getDepthFormat();
+        depthAttachment.samples          = m_sampleCount;                   
+        depthAttachment.loadOp           = VK_ATTACHMENT_LOAD_OP_CLEAR;            
+        depthAttachment.storeOp          = VK_ATTACHMENT_STORE_OP_STORE;             
+        depthAttachment.stencilLoadOp    = VK_ATTACHMENT_LOAD_OP_DONT_CARE;   
+        depthAttachment.stencilStoreOp   = VK_ATTACHMENT_STORE_OP_DONT_CARE;  
+        depthAttachment.initialLayout    = VK_IMAGE_LAYOUT_UNDEFINED;         
+        depthAttachment.finalLayout      = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;  
+
+        VkAttachmentReference depthAttachmentRef{};
+        depthAttachmentRef.attachment    = msaaEnabled ? 2 : 1;
+        depthAttachmentRef.layout        = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDependency depthDependency{};
+        depthDependency.srcSubpass       = VK_SUBPASS_EXTERNAL;
+        depthDependency.dstSubpass       = 0;
+        depthDependency.srcStageMask     = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        depthDependency.dstStageMask     = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        depthDependency.srcAccessMask    = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        depthDependency.dstAccessMask    = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+        depthDependency.dependencyFlags  = 0;
+
+        // resolve attachment: description, reference (msaa only)
+        VkAttachmentDescription resolveAttachment{};
+        VkAttachmentReference resolveAttachmentRef{};
+        if (msaaEnabled)
+        {
+            resolveAttachment                = colorAttachment;
+            resolveAttachment.samples        = VK_SAMPLE_COUNT_1_BIT;
+            resolveAttachment.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
+            resolveAttachment.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+            resolveAttachmentRef.attachment  = 1;                                       
+            resolveAttachmentRef.layout      = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; 
+        }    
+
+        // subpass description 
+        VkSubpassDescription subpass{};
+        subpass.flags                    = 0;
+        subpass.pipelineBindPoint        = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.inputAttachmentCount     = 0;
+        subpass.pInputAttachments        = nullptr;
+        subpass.colorAttachmentCount     = 1;                                   
+        subpass.pColorAttachments        = &colorAttachmentRef;      
+        subpass.pResolveAttachments      = msaaEnabled ? &resolveAttachmentRef : nullptr;
+        subpass.pDepthStencilAttachment  = &depthAttachmentRef;
+        subpass.preserveAttachmentCount  = 0;
+        subpass.pPreserveAttachments     = nullptr;
+
+        // setup attachments, subpasses and dependencies
+        std::vector<VkAttachmentDescription> attachments { colorAttachment }; 
+        if (msaaEnabled) { attachments.emplace_back(resolveAttachment); }  
+        attachments.emplace_back(depthAttachment); 
+
+        std::vector<VkSubpassDescription> subpasses { subpass };
+        std::vector<VkSubpassDependency> dependencies { depthDependency, colorDependency };   
+
+        // setup render pass 
+        if (!m_renderPass.initialize(m_vkDevice, attachments, subpasses, dependencies))
+        {
+            VK_LOG_ERROR("TextureSample::createRenderPasses failed to initialize render pass");
+            return false;
+        }
+
+        VK_LOG_DEBUG("TextureSample::createRenderPasses successful");
+        return true;
+    }
+
+    bool TextureSample::createGraphicsPipeline() noexcept
+    {
+        // vertex input bindings
+        VkVertexInputBindingDescription vertexBindings[2]{};
+
+        // binding 0: vertex positions
+        vertexBindings[0].binding = 0;
+        vertexBindings[0].stride = sizeof(float) * 3;
+        vertexBindings[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        // binding 1: vertex texcoords
+        vertexBindings[1].binding = 1;
+        vertexBindings[1].stride = sizeof(float) * 2;
+        vertexBindings[1].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        // vertex input attribute descriptions: maps shader locations to bindings
+        VkVertexInputAttributeDescription vertexAttributes[2]{};
+
+        // location 0 -> binding 0: position
+        vertexAttributes[0].location = 0;
+        vertexAttributes[0].binding = 0;
+        vertexAttributes[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+        vertexAttributes[0].offset = 0;
+
+        // location 1 -> binding 1: texcoords
+        vertexAttributes[1].location = 1;
+        vertexAttributes[1].binding = 1;
+        vertexAttributes[1].format = VK_FORMAT_R32G32_SFLOAT;
+        vertexAttributes[1].offset = 0;
+
+        // vertex input state
+        VkPipelineVertexInputStateCreateInfo vertexInputState{};
+        vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertexInputState.pNext = nullptr;
+        vertexInputState.flags = 0;
+        vertexInputState.vertexBindingDescriptionCount = 2;
+        vertexInputState.pVertexBindingDescriptions = vertexBindings;
+        vertexInputState.vertexAttributeDescriptionCount = 2;
+        vertexInputState.pVertexAttributeDescriptions = vertexAttributes;
+
+        // input assembly state: triangle list
+        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        inputAssembly.pNext = nullptr;
+        inputAssembly.flags = 0;
+        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+        // viewport and scissor state
+        auto swapchainExtent = m_swapchain->getExtent();
+
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(swapchainExtent.width);
+        viewport.height = static_cast<float>(swapchainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+
+        VkRect2D scissor{};
+        scissor.offset.x = 0;
+        scissor.offset.y = 0;
+        scissor.extent = swapchainExtent;
+
+        VkPipelineViewportStateCreateInfo viewportState{};
+        viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewportState.pNext = nullptr;
+        viewportState.flags = 0;
+        viewportState.viewportCount = 1;
+        viewportState.pViewports = &viewport;
+        viewportState.scissorCount = 1;
+        viewportState.pScissors = &scissor;
+
+        // rasterization state
+        VkPipelineRasterizationStateCreateInfo rasterizationState{};
+        rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterizationState.pNext = nullptr;
+        rasterizationState.flags = 0;
+        rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
+        rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        rasterizationState.lineWidth = 1.0f;
+
+        // multisample state
+        VkPipelineMultisampleStateCreateInfo multisampleState{};
+        multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisampleState.pNext = nullptr;
+        multisampleState.flags = 0;
+        multisampleState.rasterizationSamples = m_sampleCount;
+
+        // depth stencil state
+        VkPipelineDepthStencilStateCreateInfo depthStencilState{};
+        depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;                       
+        depthStencilState.pNext = NULL;                                                                            
+        depthStencilState.flags = 0;                                                                                
+        depthStencilState.depthTestEnable = VK_TRUE;                                                                
+        depthStencilState.depthWriteEnable = VK_TRUE;                                                               
+        depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;                                          
+        depthStencilState.depthBoundsTestEnable = VK_FALSE;
+        depthStencilState.back.failOp = VK_STENCIL_OP_KEEP;
+        depthStencilState.back.passOp = VK_STENCIL_OP_KEEP;
+        depthStencilState.back.compareOp = VK_COMPARE_OP_ALWAYS;
+        depthStencilState.stencilTestEnable = VK_FALSE;
+        depthStencilState.front = depthStencilState.back;
+
+        // color blend state
+        VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        colorBlendAttachment.blendEnable = VK_FALSE;
+
+        VkPipelineColorBlendStateCreateInfo colorBlendState{};
+        colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        colorBlendState.pNext = nullptr;
+        colorBlendState.flags = 0;
+        colorBlendState.attachmentCount = 1;
+        colorBlendState.pAttachments = &colorBlendAttachment;
+
+        // configure the graphics pipeline
+        GraphicsPipelineConfig pipelineConfig{};
+        pipelineConfig.mFlags = 0;
+        pipelineConfig.mShaderStages.emplace_back(m_vertexShader.getShaderStageInfo());
+        pipelineConfig.mShaderStages.emplace_back(m_fragmentShader.getShaderStageInfo());
+        pipelineConfig.mVertexInputState = vertexInputState;
+        pipelineConfig.mInputAssemblyState = inputAssembly;
+        pipelineConfig.mViewportState = viewportState;
+        pipelineConfig.mRasterizationState = rasterizationState;
+        pipelineConfig.mMultisampleState = multisampleState;
+        pipelineConfig.mDepthStencilState = depthStencilState;
+        pipelineConfig.mColorBlendState = colorBlendState;
+        pipelineConfig.mRenderPass = m_renderPass.get();
+        pipelineConfig.mSubpassIndex = 0;
+        pipelineConfig.mDescriptorSetLayouts.emplace_back(m_descriptorSetLayout.get());
+
+        // create graphics pipeline
+        if (!m_graphicsPipeline.initialize(m_vkDevice, pipelineConfig))
+        {
+            VK_LOG_ERROR("TextureSample::createGraphicsPipeline failed");
+            return false;
+        }
+
+        VK_LOG_DEBUG("TextureSample::createGraphicsPipeline successful");
+        return true;
+    }
+
+    bool TextureSample::createFramebuffers() noexcept
+    {
+        // allocate framebuffer for each swapchain image
+        m_framebuffers.resize(m_swapchainImageCount);
+
+        // get swapchain properties
+        const auto swapchainImageViews = m_swapchain->getColorImageViews();
+        const auto swapchainExtent     = m_swapchain->getExtent();
+        const auto msaaEnabled         = m_sampleCount > VK_SAMPLE_COUNT_1_BIT;
+
+        // prefetch attachments
+        VkImageView colorImageView   = VK_NULL_HANDLE;
+        VkImageView depthImageView  = VK_NULL_HANDLE;
+        if (msaaEnabled)
+        {
+            colorImageView  = m_msaaTarget.getColorImageView();
+            depthImageView  = m_msaaTarget.getDepthImageView();
+        }
+        else 
+        {
+            depthImageView  = m_swapchain->getDepthImageView();
+        }
+
+        // framebuffer attachments: color, resolve, depth
+        VkImageView attachments[3]{ VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE };
+        
+        // framebuffer creation info
+        VkFramebufferCreateInfo framebufferCreateInfo{};
+        framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferCreateInfo.pNext = nullptr;
+        framebufferCreateInfo.flags = 0;
+        framebufferCreateInfo.renderPass = m_renderPass.get();
+        framebufferCreateInfo.pAttachments = attachments;
+        framebufferCreateInfo.width = swapchainExtent.width;
+        framebufferCreateInfo.height = swapchainExtent.height;
+        framebufferCreateInfo.layers = 1;
+
+        // create framebuffer per swapchain image view
+        for (uint32_t i = 0; i < m_swapchainImageCount; ++i)
+        {
+            if (msaaEnabled)
+            {
+                // msaa enabled: [0] multisampled color, [1] swapchain resolve, [2] multisampled depth
+                framebufferCreateInfo.attachmentCount = 3;
+                attachments[0] = colorImageView;
+                attachments[1] = swapchainImageViews[i];
+                attachments[2] = depthImageView;
+            }
+            else 
+            {
+                // msaa disabled: [0] swapchain color, [1] swapchain depth
+                framebufferCreateInfo.attachmentCount = 2;
+                attachments[0] = swapchainImageViews[i];
+                attachments[1] = depthImageView;
+            }
+            
+            // initialize framebuffer 
+            if (!m_framebuffers[i].initialize(m_vkDevice, framebufferCreateInfo))
+            {
+                VK_LOG_ERROR("TextureSample::createFramebuffers failed at swapchain image index %u", i);
+                return false;
+            }
+        }
+
+        VK_LOG_DEBUG("TextureSample::createFramebuffers successful");
+        return true;
+    }
+
+    bool TextureSample::createSyncPrimitives() noexcept
+    {
+        // allocate sync primitives for each frame in flight
+        m_frameSyncPrimitives.resize(m_maxFramesInFlight);
+
+        // semaphore creation info (binary semaphore)
+        VkSemaphoreCreateInfo semaphoreCreateInfo{};
+        semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        semaphoreCreateInfo.pNext = nullptr;                                    // default semaphore type is binary
+        semaphoreCreateInfo.flags = 0;
+
+        // fence creation info (signaled state)
+        VkFenceCreateInfo fenceCreateInfo{};
+        fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceCreateInfo.pNext = nullptr;
+        fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;           
+
+        // create sync primitives per frame
+        for (uint32_t i = 0; i < m_maxFramesInFlight; ++i)
+        {
+            auto& frameSync = m_frameSyncPrimitives[i];
+
+            // setup image available semaphore
+            if (!frameSync.mImageAvailableSemaphore.initialize(m_vkDevice, semaphoreCreateInfo))
+            {
+                VK_LOG_ERROR("TextureSample::createSyncPrimitives failed to initialize image available semaphore : %u", i);
+                return false;
+            }
+
+            // setup render complete semaphore
+            if (!frameSync.mRenderCompleteSemaphore.initialize(m_vkDevice, semaphoreCreateInfo))
+            {
+                VK_LOG_ERROR("TextureSample::createSyncPrimitives failed to initialize render complete semaphore : %u", i);
+                return false;
+            }
+
+            // setup in flight fence for command buffer execution
+            if (!frameSync.mInFlightFence.initialize(m_vkDevice, fenceCreateInfo))
+            {
+                VK_LOG_ERROR("TextureSample::createSyncPrimitives failed to initialize fence : %u", i);
+                return false;
+            }
+        }
+
+        VK_LOG_DEBUG("TextureSample::createSyncPrimitives successful");
+        return true;
+    }
+
+    bool TextureSample::buildCommandBuffers() noexcept
+    {
+        // check if msaa is enabled
+        const bool msaaEnabled = m_sampleCount > VK_SAMPLE_COUNT_1_BIT;
+
+        // clear values for render pass; color: 0, depth-stencil: 1
+        VkClearValue clearValues[3]{};
+        if (msaaEnabled)
+        {
+            clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+            clearValues[1].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+            clearValues[2].depthStencil = { 1.0f, 0 };
+        }
+        else 
+        {
+            clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+            clearValues[1].depthStencil = { 1.0f, 0 };
+        }
+
+        // render pass begin info (framebuffer updated per command buffer)
+        VkRenderPassBeginInfo renderPassBeginInfo{};
+        renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassBeginInfo.pNext = nullptr;
+        renderPassBeginInfo.renderPass = m_renderPass.get();
+        renderPassBeginInfo.renderArea.offset = {0, 0};
+        renderPassBeginInfo.renderArea.extent = m_swapchain->getExtent();
+        renderPassBeginInfo.clearValueCount = msaaEnabled ? 3 : 2;
+        renderPassBeginInfo.pClearValues = clearValues;
+
+        // vertex buffer bindings: position at binding 0, color at binding 1
+        VkBuffer vertexBuffers[] = { m_positionBuffer.get(), m_texcoordBuffer.get() };
+        VkDeviceSize offset[] = { 0, 0 };
+
+        // record commands per swapchain image
+        for (uint32_t i = 0; i < m_swapchainImageCount; ++i)
+        {
+            // reset and then begin recording into the command buffer
+            if (!m_commandBuffers[i].reset() || !m_commandBuffers[i].begin())
+            {
+                return false;
+            }
+
+            // begin render pass for this frame
+            renderPassBeginInfo.framebuffer = m_framebuffers[i].get();
+            m_commandBuffers[i].beginRenderPass(renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+            // record graphics pipeline state, resource bindings, and draw commands for this frame
+            m_commandBuffers[i].bindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
+            m_commandBuffers[i].bindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.getLayout(), 0, 1, &m_descriptorSets[i]);
+            m_commandBuffers[i].bindVertexBuffers(0, 2, vertexBuffers, offset);
+            m_commandBuffers[i].draw(6, 1, 0, 0); 
+
+            // end current render pass
+            m_commandBuffers[i].endRenderPass();
+
+            // finalize the command buffer
+            if (!m_commandBuffers[i].end())
+            {
+                return false;
+            }
+        }
+
+        VK_LOG_DEBUG("TextureSample::buildCommandBuffers successful");
+        return true;
+    }
+
+    bool TextureSample::prepareScene() noexcept
+    {
+        // calculate aspect ratio of window and initialize camera
+        const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
+        m_camera = std::make_shared<Camera>(45.0f, aspectRatio, 0.1f, 100.0f, true);
+
+        // register listeners with the platform
+        if (auto platform = m_platform.lock())
+        {
+            platform->addListener(m_camera);
+        }
+
+        // mark ready for render
+        m_readyToRender.store(true);
+        return true;
+    }
+
+    bool TextureSample::updateUniformBuffer() noexcept
+    {
+        // setup uniform data
+        ubo::FrameData& frameData = m_uboFrameData[m_currentImageIndex];
+        frameData.model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
+        frameData.view = m_camera->getViewMatrix();
+        frameData.projection = m_camera->getProjectionMatrix();
+
+        // upload to uniform buffer
+        if (!m_uniformBuffers[m_currentImageIndex].uploadHostVisible(&frameData, sizeof(frameData)))
+        {
+            VK_LOG_ERROR("TextureSample::updateUniformBuffers failed for frame: %d", m_currentImageIndex);
+            return false;
+        }
+        
+        return true;
+    }
+}   // namespace keplar
