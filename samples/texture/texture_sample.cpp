@@ -21,7 +21,6 @@ namespace keplar
         , m_currentImageIndex(0)
         , m_currentFrameIndex(0)
         , m_readyToRender(false)
-        , m_sampler(VK_NULL_HANDLE)
     {
     }
 
@@ -40,10 +39,6 @@ namespace keplar
         }
 
         // destroy vulkan resources 
-        if (m_sampler != VK_NULL_HANDLE) 
-        { 
-            vkDestroySampler(m_vkDevice, m_sampler, nullptr); 
-        }
         m_swapchain.reset();
         m_commandPool.releaseBuffers(m_commandBuffers);
     }
@@ -84,6 +79,7 @@ namespace keplar
         if (!createMsaaTarget(*device))     { return false; }
         if (!createCommandPool(*device))    { return false; }
         if (!createCommandBuffers())        { return false; }
+        if (!createTextureSamplers(*device)){ return false; }
         if (!createVertexBuffers(*device))  { return false; }
         if (!createTextures(*device))       { return false; }
         if (!createUniformBuffers(*device)) { return false; }
@@ -343,6 +339,19 @@ namespace keplar
         return true;
     }
 
+    bool TextureSample::createTextureSamplers(const VulkanDevice& device) noexcept
+    {
+        // create predefined samplers
+        if (!m_samplers.initialize(device))
+        {
+            VK_LOG_ERROR("TextureSample::createTextureSamplers failed to create samplers.");
+            return false;
+        }
+
+        VK_LOG_DEBUG("TextureSample::createTextureSamplers successful");
+        return true;
+    }
+
     bool TextureSample::createVertexBuffers(const VulkanDevice& device) noexcept
     {
         // position data 
@@ -409,35 +418,6 @@ namespace keplar
         {
             VK_LOG_ERROR("TextureSample::createTextures failed to load texture");
             return false;
-        }
-
-        // configure sampler parameters
-        VkSamplerCreateInfo samplerCreateInfo{};
-        samplerCreateInfo.sType                     = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        samplerCreateInfo.pNext                     = NULL;
-        samplerCreateInfo.flags                     = 0;
-        samplerCreateInfo.magFilter                 = VK_FILTER_LINEAR;
-        samplerCreateInfo.minFilter                 = VK_FILTER_LINEAR;
-        samplerCreateInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        samplerCreateInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerCreateInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerCreateInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerCreateInfo.anisotropyEnable          = VK_FALSE;
-        samplerCreateInfo.maxAnisotropy             = 16.0f;
-        samplerCreateInfo.compareEnable             = VK_FALSE;
-        samplerCreateInfo.compareOp                 = VK_COMPARE_OP_ALWAYS;
-        samplerCreateInfo.minLod                    = 0.0f;
-        samplerCreateInfo.maxLod                    = static_cast<float>(m_texture.getMipLevels());
-        samplerCreateInfo.mipLodBias                = 0.0f;
-        samplerCreateInfo.borderColor               = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-        samplerCreateInfo.unnormalizedCoordinates   = VK_FALSE;
-
-        // create vulkan sampler object
-        VkResult vkResult = vkCreateSampler(m_vkDevice, &samplerCreateInfo, NULL, &m_sampler);
-        if (vkResult != VK_SUCCESS)
-        {
-            VK_LOG_FATAL("vkCreateSampler failed to create sampler for texture : %s (code: %d)", string_VkResult(vkResult), vkResult);
-            return vkResult;
         }
 
         VK_LOG_DEBUG("TextureSample::createTextures successful");
@@ -536,29 +516,17 @@ namespace keplar
 
     bool TextureSample::createDescriptorPool() noexcept
     {
-        // pool size for uniform buffers
-        VkDescriptorPoolSize uboPoolSize{};
-        uboPoolSize.type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        uboPoolSize.descriptorCount = 1;
+        // descriptor set requirements
+        DescriptorRequirements requirements{};
+        requirements.mMaxSets = m_swapchainImageCount;
+        requirements.mUniformCount = 1;
+        requirements.mSamplerCount = 1;
 
-        // pool size for combined image samplers
-        VkDescriptorPoolSize samplerPoolSize{};
-        samplerPoolSize.type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        samplerPoolSize.descriptorCount = 1;
-
-        std::array<VkDescriptorPoolSize, 2> descriptorPoolSizes = { uboPoolSize, samplerPoolSize };
-
-        // descriptor pool creation info
-        VkDescriptorPoolCreateInfo descriptorPoolInfo{};
-        descriptorPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        descriptorPoolInfo.pNext = nullptr;
-        descriptorPoolInfo.flags = 0;
-        descriptorPoolInfo.poolSizeCount = static_cast<uint32_t>(descriptorPoolSizes.size());
-        descriptorPoolInfo.pPoolSizes = descriptorPoolSizes.data();
-        descriptorPoolInfo.maxSets = m_swapchainImageCount;
+        // add requirements
+        m_descriptorPool.addRequirements(requirements);
 
         // create vulkan descriptor pool
-        if (!m_descriptorPool.initialize(m_vkDevice, descriptorPoolInfo))
+        if (!m_descriptorPool.initialize(m_vkDevice))
         {
             VK_LOG_ERROR("TextureSample::createDescriptorPool failed");
             return false;
@@ -615,7 +583,7 @@ namespace keplar
             VkDescriptorImageInfo imageInfo{};
             imageInfo.imageLayout   = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             imageInfo.imageView     = m_texture.getImageView();
-            imageInfo.sampler       = m_sampler;
+            imageInfo.sampler       = m_samplers.get(VulkanSamplers::Type::LinearRepeat);
 
             VkWriteDescriptorSet samplerWrite{};
             samplerWrite.sType              = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

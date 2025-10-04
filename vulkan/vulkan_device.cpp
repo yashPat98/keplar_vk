@@ -141,6 +141,11 @@ namespace keplar
         return m_vkPhysicalDeviceFeatures;
     }
 
+    const VkPhysicalDeviceFeatures& VulkanDevice::getEnabledFeatures() const noexcept
+    {
+        return m_deviceConfig.mRequestedFeatures;
+    }
+
     const VkPhysicalDeviceMemoryProperties& VulkanDevice::getPhysicalDeviceMemoryProperties() const noexcept
     {
         return m_vkPhysicalDeviceMemoryProperties;

@@ -10,6 +10,7 @@ namespace keplar
     VulkanDescriptorPool::VulkanDescriptorPool() noexcept
         : m_vkDevice(VK_NULL_HANDLE)
         , m_vkDescriptorPool(VK_NULL_HANDLE)
+        , m_requirements{}
     {
     }
 
@@ -56,7 +57,15 @@ namespace keplar
         return *this;
     }
 
-    bool VulkanDescriptorPool::initialize(VkDevice vkDevice, const VkDescriptorPoolCreateInfo& createInfo) noexcept
+    void VulkanDescriptorPool::addRequirements(const DescriptorRequirements& requirement) noexcept
+    {
+        // add requirements to aggregate totals
+        m_requirements.mMaxSets         += requirement.mMaxSets;
+        m_requirements.mUniformCount    += requirement.mUniformCount;
+        m_requirements.mSamplerCount    += requirement.mSamplerCount;
+    }
+
+    bool VulkanDescriptorPool::initialize(VkDevice vkDevice) noexcept
     {
         // validate device handle
         if (vkDevice == VK_NULL_HANDLE)
@@ -65,7 +74,33 @@ namespace keplar
             return false;
         }
 
-        VkResult vkResult = vkCreateDescriptorPool(vkDevice, &createInfo, nullptr, &m_vkDescriptorPool);
+        // prepare vulkan descriptor pool sizes based on aggregated requirements
+        std::vector<VkDescriptorPoolSize> poolSizes;
+        poolSizes.reserve(2);
+        if (m_requirements.mUniformCount)
+        {
+            VkDescriptorPoolSize uniformPoolSize{};
+            uniformPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            uniformPoolSize.descriptorCount = m_requirements.mUniformCount;
+            poolSizes.emplace_back(std::move(uniformPoolSize));
+        }
+        if (m_requirements.mSamplerCount)
+        {
+            VkDescriptorPoolSize samplerPoolSize{};
+            samplerPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            samplerPoolSize.descriptorCount = m_requirements.mSamplerCount;
+            poolSizes.emplace_back(std::move(samplerPoolSize));
+        }
+
+        // descriptor pool creation info structure
+        VkDescriptorPoolCreateInfo poolCreateInfo{};
+        poolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolCreateInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+        poolCreateInfo.pPoolSizes = poolSizes.data();
+        poolCreateInfo.maxSets = m_requirements.mMaxSets;
+
+        // create the vulkan descriptor pool
+        VkResult vkResult = vkCreateDescriptorPool(vkDevice, &poolCreateInfo, nullptr, &m_vkDescriptorPool);
         if (vkResult != VK_SUCCESS)
         {
             VK_LOG_FATAL("VulkanDescriptorPool failed to create descriptor pool : %s (code: %d)", string_VkResult(vkResult), vkResult);

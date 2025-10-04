@@ -461,22 +461,17 @@ namespace keplar
 
     bool Triangle::createDescriptorPool() noexcept
     {
-        // descriptor pool size info
-        VkDescriptorPoolSize descriptorPoolSize{};
-        descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorPoolSize.descriptorCount = 1;
+        // descriptor set requirements
+        DescriptorRequirements requirements{};
+        requirements.mMaxSets = m_swapchainImageCount;
+        requirements.mUniformCount = 1;
+        requirements.mSamplerCount = 0;
 
-        // descriptor pool creation info
-        VkDescriptorPoolCreateInfo descriptorPoolInfo{};
-        descriptorPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        descriptorPoolInfo.pNext = nullptr;
-        descriptorPoolInfo.flags = 0;
-        descriptorPoolInfo.poolSizeCount = 1;
-        descriptorPoolInfo.pPoolSizes = &descriptorPoolSize;
-        descriptorPoolInfo.maxSets = m_swapchainImageCount;
+        // add requirements
+        m_descriptorPool.addRequirements(requirements);
 
         // create vulkan descriptor pool
-        if (!m_descriptorPool.initialize(m_vkDevice, descriptorPoolInfo))
+        if (!m_descriptorPool.initialize(m_vkDevice))
         {
             VK_LOG_ERROR("Triangle::createDescriptorPool failed");
             return false;

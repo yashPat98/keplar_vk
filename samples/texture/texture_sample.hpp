@@ -24,6 +24,7 @@
 #include "vulkan/vulkan_descriptor_set_layout.hpp"
 #include "vulkan/vulkan_descriptor_pool.hpp"
 #include "vulkan/vulkan_pipeline.hpp"
+#include "vulkan/vulkan_samplers.hpp"
 
 #include "graphics/msaa_target.hpp"
 #include "graphics/camera.hpp"
@@ -52,6 +53,7 @@ namespace keplar
             bool createMsaaTarget(const VulkanDevice& device) noexcept;
             bool createCommandPool(const VulkanDevice& device) noexcept;
             bool createCommandBuffers() noexcept;
+            bool createTextureSamplers(const VulkanDevice& device) noexcept;
             bool createVertexBuffers(const VulkanDevice& device) noexcept;
             bool createTextures(const VulkanDevice& device) noexcept;
             bool createUniformBuffers(const VulkanDevice& device) noexcept;
@@ -115,6 +117,7 @@ namespace keplar
             // shaders and pipeline
             VulkanShader                        m_vertexShader;
             VulkanShader                        m_fragmentShader;
+            VulkanSamplers                      m_samplers;     
             VulkanDescriptorSetLayout           m_descriptorSetLayout;
             VulkanDescriptorPool                m_descriptorPool;
             VulkanPipeline                      m_graphicsPipeline;
@@ -133,6 +136,5 @@ namespace keplar
 
             // texture
             Texture                             m_texture;
-            VkSampler                           m_sampler;
     };
 }   // namespace keplar

@@ -69,6 +69,7 @@ namespace keplar
             // physical device information
             const VkPhysicalDeviceProperties& getPhysicalDeviceProperties() const noexcept;
             const VkPhysicalDeviceFeatures& getPhysicalDeviceFeatures() const noexcept;
+            const VkPhysicalDeviceFeatures& getEnabledFeatures() const noexcept;
             const VkPhysicalDeviceMemoryProperties& getPhysicalDeviceMemoryProperties() const noexcept;
             bool isExtensionEnabled(const char* extensionName) const noexcept;
 

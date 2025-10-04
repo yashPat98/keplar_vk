@@ -8,6 +8,13 @@
 
 namespace keplar
 {
+    struct DescriptorRequirements
+    {
+        uint32_t mMaxSets;
+        uint32_t mUniformCount;
+        uint32_t mSamplerCount;
+    };
+
     class VulkanDescriptorPool
     {
         public:   
@@ -23,7 +30,9 @@ namespace keplar
             VulkanDescriptorPool(VulkanDescriptorPool&&) noexcept;
             VulkanDescriptorPool& operator=(VulkanDescriptorPool&&) noexcept;
 
-            bool initialize(VkDevice vkDevice, const VkDescriptorPoolCreateInfo& createInfo) noexcept;
+            // usage
+            void addRequirements(const DescriptorRequirements& requirements) noexcept;
+            bool initialize(VkDevice vkDevice) noexcept;
             
             // accessor
             VkDescriptorPool get() const noexcept { return m_vkDescriptorPool; }
@@ -32,5 +41,6 @@ namespace keplar
             // vulkan handles
             VkDevice m_vkDevice;
             VkDescriptorPool m_vkDescriptorPool;
+            DescriptorRequirements m_requirements;
     };  
 }   // namespace keplar
