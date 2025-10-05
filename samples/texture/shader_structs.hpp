@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "graphics/common.hpp"
+#include "graphics/math3d.hpp"
 
 namespace keplar::ubo
 {

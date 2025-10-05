@@ -7,7 +7,7 @@
 
 namespace 
 {
-    static inline constexpr float CAMERA_DEFAULT_SPEED       = 30.0f;
+    static inline constexpr float CAMERA_DEFAULT_SPEED       = 10.0f;
     static inline constexpr float CAMERA_DEFAULT_DAMPING     = 1000.0f;
     static inline constexpr float CAMERA_CINEMATIC_DAMPING   = 10.0f;
     static inline constexpr float CAMERA_DEFAULT_SENSITIVITY = 0.1f;

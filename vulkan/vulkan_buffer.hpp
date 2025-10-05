@@ -2,6 +2,8 @@
 //  File: vulkan_buffer.hpp · Created by Yash Patel · 8-2-2025
 // ────────────────────────────────────────────
 
+#pragma once
+
 #include "vulkan/vulkan_config.hpp"
 
 namespace keplar

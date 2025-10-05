@@ -8,8 +8,6 @@
 #include <atomic>
 
 #include "graphics/renderer.hpp"
-#include "graphics/common.hpp"
-
 #include "platform/platform.hpp"
 #include "vulkan/vulkan_device.hpp"
 #include "vulkan/vulkan_swapchain.hpp"

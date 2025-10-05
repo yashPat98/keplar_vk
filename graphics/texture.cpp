@@ -5,12 +5,7 @@
 #include "texture.hpp"
 #include <algorithm>
 
-// stb header
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-
-// project headers
-#include "common.hpp"
+#include "asset_io.hpp"
 #include "core/keplar_config.hpp"
 #include "vulkan/vulkan_device.hpp"
 #include "vulkan/vulkan_command_pool.hpp"
@@ -204,7 +199,7 @@ namespace keplar
         // compute mip levels
         if (genMips)
         {
-            const auto maxDim = std::max(imageData.width, imageData.height);
+            const auto maxDim = max(imageData.width, imageData.height);
             m_mipLevels += static_cast<uint32_t>(std::floor(std::log2(static_cast<float>(maxDim))));
         }
 
@@ -581,7 +576,7 @@ namespace keplar
             blit.dstSubresource.baseArrayLayer = 0;
             blit.dstSubresource.layerCount     = 1;
             blit.dstOffsets[0]                 = {0, 0, 0};
-            blit.dstOffsets[1]                 = { std::max(1, mipWidth / 2), std::max(1, mipHeight / 2), 1 };
+            blit.dstOffsets[1]                 = { max(1, mipWidth / 2), max(1, mipHeight / 2), 1 };
 
             vkCmdBlitImage(commandBuffer, m_vkImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_vkImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
 
@@ -597,8 +592,8 @@ namespace keplar
             transitionImageLayout(commandBuffer, srcStage, dstStage, oldLayout, newLayout, srcAccess, dstAccess, baseMipLevel, levelCount);
 
             // halve the dimensions for the next mip level
-            mipWidth  = std::max(1, mipWidth / 2);
-            mipHeight = std::max(1, mipHeight / 2);
+            mipWidth  = max(1, mipWidth / 2);
+            mipHeight = max(1, mipHeight / 2);
         }
 
         // transition last mip level from transfer-dst -> shader-read
