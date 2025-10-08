@@ -38,10 +38,11 @@ namespace keplar
             TextureSample() noexcept;
             ~TextureSample();
 
-            // core renderer interface: initialize, update, render
+            // core renderer interface: initialize, update, render, configure
             virtual bool initialize(std::weak_ptr<Platform> platform, std::weak_ptr<VulkanContext> context) noexcept override;
             virtual bool update(float dt) noexcept override;
             virtual bool renderFrame() noexcept override;
+            virtual void setupVulkanConfig(VulkanContextConfig& config) noexcept override;
 
             // handle window and user input events
             virtual void onWindowResize(uint32_t, uint32_t) override;

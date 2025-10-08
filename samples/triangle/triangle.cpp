@@ -91,6 +91,11 @@ namespace keplar
         return true;
     }
 
+    bool Triangle::update(float /* dt */) noexcept
+    {
+        return true;
+    }
+
     bool Triangle::renderFrame() noexcept
     {
         // 1️⃣ skip frame if renderer is not ready
@@ -180,9 +185,8 @@ namespace keplar
         return true;
     }
 
-    bool Triangle::update(float /* dt */) noexcept
+    void Triangle::setupVulkanConfig(VulkanContextConfig& /* config */) noexcept
     {
-        return true;
     }
 
     void Triangle::onWindowResize(uint32_t width, uint32_t height)

@@ -115,6 +115,9 @@ namespace keplar
             config.mValidationLayers.emplace_back(VK_LAYER_KHRONOS_VALIDATION_NAME);
         }
 
+        // allow renderer to configure vulkan context
+        m_renderer->setupVulkanConfig(config);
+
         // build vulkan context using platform and config
         m_vulkanContext = VulkanContext::Builder()
                             .withPlatform(m_platform)

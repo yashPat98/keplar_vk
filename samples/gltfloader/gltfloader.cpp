@@ -98,6 +98,13 @@ namespace keplar
         return true;
     }
 
+    bool GLTFLoader::update(float dt) noexcept
+    {
+        // update camera 
+        m_camera->update(dt);
+        return true;
+    }
+
     bool GLTFLoader::renderFrame() noexcept
     {
         // 1️⃣ skip frame if renderer is not ready
@@ -187,11 +194,10 @@ namespace keplar
         return true;
     }
 
-    bool GLTFLoader::update(float dt) noexcept
+    void GLTFLoader::setupVulkanConfig(VulkanContextConfig& config) noexcept
     {
-        // update camera 
-        m_camera->update(dt);
-        return true;
+        // enable sampler anisotropy for higher quality texture filtering
+        config.mRequestedFeatures.samplerAnisotropy = VK_TRUE;
     }
 
     void GLTFLoader::onWindowResize(uint32_t width, uint32_t height)
