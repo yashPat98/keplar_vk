@@ -93,7 +93,7 @@ namespace keplar
         }
 
         // initialize the platform window and system resources
-        if (!m_platform->initialize(config::kWindowTitle, config::kDefaultWidth, config::kDefaultHeight))
+        if (!m_platform->initialize(config::kWindowTitle, config::kDefaultWidth, config::kDefaultHeight, config::kStartMaximized))
         {
             VK_LOG_DEBUG("Failed to initialize platform window");
             return false;

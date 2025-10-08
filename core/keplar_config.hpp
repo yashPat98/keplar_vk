@@ -7,9 +7,10 @@
 
 namespace keplar::config 
 {
-    inline constexpr const char* kWindowTitle              = "keplar_vk";
-    inline constexpr int kDefaultWidth                     = 800;
-    inline constexpr int kDefaultHeight                    = 600;
+    inline constexpr const char* kWindowTitle              = "keplar";
+    inline constexpr int kDefaultWidth                     = 1920;
+    inline constexpr int kDefaultHeight                    = 1080;
+    inline constexpr bool kStartMaximized                  = true;
 
     static inline const std::filesystem::path kShaderDir   = "resources/shaders/";
     static inline const std::filesystem::path kTextureDir  = "resources/textures/";

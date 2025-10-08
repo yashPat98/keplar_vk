@@ -5,9 +5,9 @@
 #include "platform_factory.hpp"
 
 #ifdef _WIN32
-#include "win32_platform.hpp"
+#include "windows/win32_platform.hpp"
 #elif defined(__linux__)
-#include "x11_platform.hpp"
+#include "linux/x11_platform.hpp"
 #else
 #error "Unsupported platform"
 #endif

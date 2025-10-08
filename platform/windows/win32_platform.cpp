@@ -3,8 +3,15 @@
 // ────────────────────────────────────────────
 
 #include "win32_platform.hpp"
+#include "resource.hpp"
 #include "utils/logger.hpp"
 #include "vulkan/vulkan_utils.hpp"
+
+namespace 
+{
+    static constexpr int kMinWindowWidth  = 1280;
+    static constexpr int kMinWindowHeight = 720;
+}
 
 namespace keplar
 {
@@ -24,7 +31,7 @@ namespace keplar
         shutdown();
     }
 
-    bool Win32Platform::initialize(const std::string& title, int width, int height) noexcept 
+    bool Win32Platform::initialize(const std::string& title, int width, int height, bool maximized) noexcept 
     {
         // convert title to wide string
         TCHAR appName[256];   
@@ -39,15 +46,13 @@ namespace keplar
         wndclass.lpfnWndProc    = Win32Platform::WndProc;                                         
         wndclass.cbClsExtra     = 0;                                                
         wndclass.cbWndExtra     = 0;                                                
-        wndclass.hInstance      = m_hInstance;                                   
+        wndclass.hInstance      = m_hInstance;  
+        wndclass.hIcon          = LoadIcon(m_hInstance, MAKEINTRESOURCE(IDI_ICON1));  
+        wndclass.hIconSm        = LoadIcon(m_hInstance, MAKEINTRESOURCE(IDI_ICON1));                               
         wndclass.hCursor        = LoadCursor((HINSTANCE)NULL, IDC_ARROW);           
         wndclass.hbrBackground  = (HBRUSH)GetStockObject(BLACK_BRUSH);              
         wndclass.lpszClassName  = appName;                                          
         wndclass.lpszMenuName   = NULL;              
-        
-        // TODO: add logo
-        // wndclass.hIcon        = LoadIcon(m_hInstance, MAKEINTRESOURCE(IDI_ICON1));
-        // wndclass.hIconSm      = LoadIcon(m_hInstance, MAKEINTRESOURCE(IDI_ICON1));
 
 		// register the window class
 		RegisterClassEx(&wndclass);
@@ -78,7 +83,7 @@ namespace keplar
 
         // store this pointer for message routing
         SetWindowLongPtr(m_hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
-        ShowWindow(m_hwnd, SW_SHOWDEFAULT);
+        ShowWindow(m_hwnd, maximized ? SW_MAXIMIZE : SW_SHOWDEFAULT);
 		SetForegroundWindow(m_hwnd);
 		SetFocus(m_hwnd);
         VK_LOG_INFO("window is created successfully.");
@@ -188,6 +193,11 @@ namespace keplar
                 // render loop is exited gracefully
                 platform->m_eventManager.onWindowClose();
                 PostQuitMessage(0);
+                return 0;
+
+            case WM_GETMINMAXINFO:
+                reinterpret_cast<MINMAXINFO*>(lParam)->ptMinTrackSize.x = kMinWindowWidth;
+                reinterpret_cast<MINMAXINFO*>(lParam)->ptMinTrackSize.y = kMinWindowHeight;
                 return 0;
 
             case WM_SIZE:

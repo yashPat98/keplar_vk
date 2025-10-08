@@ -5,8 +5,8 @@
 #pragma once
 
 #include <Windows.h>
-#include "platform.hpp"
-#include "event_manager.hpp"
+#include "platform/platform.hpp"
+#include "platform/event_manager.hpp"
 
 namespace keplar
 {
@@ -17,7 +17,7 @@ namespace keplar
             virtual ~Win32Platform() override;
 
             // lifecycle
-            virtual bool initialize(const std::string& title, int width, int height) noexcept override;
+            virtual bool initialize(const std::string& title, int width, int height, bool maximized) noexcept override;
             virtual void pollEvents() noexcept override;
             virtual bool shouldClose() noexcept override;
             virtual void shutdown() noexcept override;

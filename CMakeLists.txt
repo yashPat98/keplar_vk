@@ -2,7 +2,7 @@
 # Project Setup
 # ───────────────────────────────────────────────
 cmake_minimum_required(VERSION 3.15)
-project(keplar_vk VERSION 1.0 LANGUAGES CXX)
+project(keplar VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -82,10 +82,12 @@ set(KEPLAR_SRC
 # ───────────────────────────────────────────────
 if(WIN32)
     add_definitions(-DPLATFORM_WINDOWS)
-    list(APPEND KEPLAR_SRC ${CMAKE_SOURCE_DIR}/platform/win32_platform.cpp)
+    list(APPEND KEPLAR_SRC 
+         ${CMAKE_SOURCE_DIR}/platform/windows/win32_platform.cpp
+         ${CMAKE_SOURCE_DIR}/platform/windows/keplar.rc)
 elseif(UNIX)
     add_definitions(-DPLATFORM_LINUX)
-    list(APPEND KEPLAR_SRC ${CMAKE_SOURCE_DIR}/platform/x11_platform.cpp)
+    list(APPEND KEPLAR_SRC ${CMAKE_SOURCE_DIR}/platform/linux/x11_platform.cpp)
 else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
@@ -102,20 +104,20 @@ include_directories(
 # ───────────────────────────────────────────────
 # Executable Target
 # ───────────────────────────────────────────────
-add_executable(keplar_vk WIN32 ${KEPLAR_SRC})
+add_executable(keplar WIN32 ${KEPLAR_SRC})
 
 if(MSVC)
-    target_compile_options(keplar_vk PRIVATE /W4 /WX)
+    target_compile_options(keplar PRIVATE /W4 /WX)
 else()
-    target_compile_options(keplar_vk PRIVATE -Wall -Wextra -Werror)
+    target_compile_options(keplar PRIVATE -Wall -Wextra -Werror)
 endif()
 
-target_link_libraries(keplar_vk PRIVATE Vulkan::Vulkan)
+target_link_libraries(keplar PRIVATE Vulkan::Vulkan)
 
 # ───────────────────────────────────────────────
 # Visual Studio Groups
 # ───────────────────────────────────────────────
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT keplar_vk)
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT keplar)
 
 source_group(TREE ${CMAKE_SOURCE_DIR}/core     PREFIX "core"     FILES ${CORE_SRC})
 source_group(TREE ${CMAKE_SOURCE_DIR}/platform PREFIX "platform" FILES ${PLATFORM_SRC})
@@ -129,7 +131,7 @@ source_group(TREE ${CMAKE_SOURCE_DIR}/shaders/${KEPLAR_SAMPLE_LOWER} PREFIX "sha
 # Windows Executable Flags
 # ───────────────────────────────────────────────
 if(WIN32)
-    set_target_properties(keplar_vk PROPERTIES
+    set_target_properties(keplar PROPERTIES
         WIN32_EXECUTABLE TRUE
         LINK_FLAGS "/SUBSYSTEM:CONSOLE"
         VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"

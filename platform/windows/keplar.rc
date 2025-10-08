@@ -1,0 +1,7 @@
+// ────────────────────────────────────────────
+//  File: keplar.rc · Created by Yash Patel · 10-08-2025
+// ────────────────────────────────────────────
+
+#include "resource.hpp"
+
+IDI_ICON1 ICON "keplar.ico"

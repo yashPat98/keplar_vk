@@ -19,7 +19,7 @@ namespace keplar
             virtual ~Platform() = default;
 
             // lifecycle
-            virtual bool initialize(const std::string& title, int width, int height) noexcept = 0;
+            virtual bool initialize(const std::string& title, int width, int height, bool maximized) noexcept = 0;
             virtual void pollEvents() noexcept = 0;
             virtual bool shouldClose() noexcept = 0;
             virtual void shutdown() noexcept = 0;
