@@ -30,6 +30,7 @@ find_package(Vulkan REQUIRED)
 set(KEPLAR_SAMPLES
     TRIANGLE
     TEXTURE
+    GLTFLOADER
 )
 
 if(NOT DEFINED KEPLAR_SAMPLE)
@@ -38,6 +39,7 @@ if(NOT DEFINED KEPLAR_SAMPLE)
         "Please configure with one of the following flags:\n"
         "  -DKEPLAR_SAMPLE=TRIANGLE   # Build the Triangle sample\n"
         "  -DKEPLAR_SAMPLE=TEXTURE    # Build the Texture sample\n"
+        "  -DKEPLAR_SAMPLE=GLTFLOADER # Build the Texture sample\n"
     )
 endif()
 

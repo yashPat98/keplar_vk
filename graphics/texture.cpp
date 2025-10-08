@@ -5,7 +5,6 @@
 #include "texture.hpp"
 #include <algorithm>
 
-#include "asset_io.hpp"
 #include "core/keplar_config.hpp"
 #include "vulkan/vulkan_device.hpp"
 #include "vulkan/vulkan_command_pool.hpp"
@@ -16,11 +15,11 @@
 namespace
 {
     // cross-platform safe fopen wrapper
-    FILE* fopenSafe(const std::filesystem::path& path, const char* mode) noexcept
+    FILE* fopenSafe(const std::string& filepath, const char* mode) noexcept
     {
     #ifdef _WIN32
         FILE* file = nullptr;
-        if (fopen_s(&file, path.string().c_str(), mode) != 0)
+        if (fopen_s(&file, filepath.c_str(), mode) != 0)
             return nullptr;
         return file;
     #else
@@ -49,6 +48,7 @@ namespace keplar
         , m_height(0)
         , m_channels(0)
         , m_mipLevels(0)
+        , m_format(VK_FORMAT_UNDEFINED)
     {
     }
 
@@ -66,6 +66,7 @@ namespace keplar
         , m_height(other.m_height)
         , m_channels(other.m_channels)
         , m_mipLevels(other.m_mipLevels)
+        , m_format(other.m_format)
     {
         // reset the other
         other.m_vkDevice = VK_NULL_HANDLE;
@@ -76,6 +77,7 @@ namespace keplar
         other.m_height = 0;
         other.m_channels = 0;
         other.m_mipLevels = 0;
+        other.m_format = VK_FORMAT_UNDEFINED;
     }
 
     Texture& Texture::operator=(Texture&& other) noexcept
@@ -95,6 +97,7 @@ namespace keplar
             m_height = other.m_height;
             m_channels = other.m_channels;
             m_mipLevels = other.m_mipLevels;
+            m_format = other.m_format;
 
             // reset the other
             other.m_vkDevice = VK_NULL_HANDLE;
@@ -105,6 +108,7 @@ namespace keplar
             other.m_height = 0;
             other.m_channels = 0;
             other.m_mipLevels = 0;
+            other.m_format = VK_FORMAT_UNDEFINED;
         }
         
         return *this;
@@ -112,19 +116,115 @@ namespace keplar
 
     bool Texture::load(const VulkanDevice& device, const VulkanCommandPool& commandPool, const std::string& filepath, bool flipY, bool genMips) noexcept
     {
-        // build absolute texture path
+        // image info container
+        ImageData imageData{};
         const std::filesystem::path texturePath = keplar::config::kTextureDir / filepath;
 
-        // open file in binary mode
-        FILE* file = fopenSafe(texturePath.string().c_str(), "rb");
-        if (!file)
+        // load image data from file
+        if (!loadImageData(texturePath.string(), imageData, flipY))
         {
-            VK_LOG_ERROR("failed to open texture file: %s", filepath.c_str());
+            VK_LOG_ERROR("Texture::load :: failed to load image data from file: %s", filepath.c_str());
             return false;
         }
 
+        // create vulkan image from loaded image info
+        if (!createImage(device, commandPool, imageData, genMips))
+        {
+            VK_LOG_DEBUG("Texture::load :: failed to create vulkan image from loaded image info: %s", filepath.c_str());
+            stbi_image_free(imageData.pixels);
+            return false;
+        }
+
+        // create vulkan image view so that shaders can access and sample
+        if (!createImageView())
+        {
+            VK_LOG_ERROR("Texture::load :: failed to create image view for texture: %s", filepath.c_str());
+            stbi_image_free(imageData.pixels);
+            return false;
+        }
+
+        // cleanup and return success
+        stbi_image_free(imageData.pixels);
+        return true;
+    }
+
+    bool Texture::load(const VulkanDevice& device, const VulkanCommandPool& commandPool, const tinygltf::Image& gltfImage, bool genMips) noexcept
+    {
         // image info container
-        ImageData imageData;
+        ImageData imageData{};
+        std::string imageName;
+        bool isEmbedded = false;
+
+        if (!gltfImage.image.empty())
+        {
+            // embedded image: pixels already loaded in tinygltf::Image
+            imageData.pixels   = const_cast<void*>(static_cast<const void*>(gltfImage.image.data()));
+            imageData.width    = gltfImage.width;
+            imageData.height   = gltfImage.height;
+            imageData.channels = gltfImage.component;
+            imageData.hdr      = false; 
+            imageName          = !gltfImage.name.empty() ? gltfImage.name : "embedded_image";
+            isEmbedded         = true;
+
+            if (!imageData.pixels || imageData.width <= 0 || imageData.height <= 0)
+            {
+                VK_LOG_ERROR("Texture::load failed :: invalid embedded glTF image: %s (%dx%d)", imageName.c_str(), imageData.width, imageData.height);
+                return false;
+            }
+        }
+        else if (!gltfImage.uri.empty())
+        {
+            // non-embedded image: load from external file
+            imageName = gltfImage.uri;
+            const std::filesystem::path texturePath = keplar::config::kModelDir / imageName;
+            if (!loadImageData(texturePath.string(), imageData))
+            {
+                VK_LOG_ERROR("Texture::load :: failed to load image data: %s", imageName.c_str());
+                return false;
+            }
+        }
+        else 
+        {
+            VK_LOG_ERROR("Texture::load :: glTF image has no embedded data or URI!");
+            return false;
+        }
+
+        // create vulkan image from loaded image info
+        if (!createImage(device, commandPool, imageData, genMips))
+        {
+            VK_LOG_DEBUG("Texture::load :: failed to create vulkan image for loaded glTF image: %s", imageName.c_str());
+            if (!isEmbedded) { stbi_image_free(imageData.pixels); }
+            return false;
+        }
+
+        // create vulkan image view for sampling
+        if (!createImageView())
+        {
+            VK_LOG_ERROR("Texture::load :: failed to create image view for glTF image: %s", imageName.c_str());
+            if (!isEmbedded) { stbi_image_free(imageData.pixels); }
+            return false;
+        }
+
+        // cleanup for non-embedded image
+        if (!isEmbedded)
+        {
+            stbi_image_free(imageData.pixels);
+        }
+
+        return true;
+    }
+
+    bool Texture::loadImageData(const std::string& filepath, ImageData& imageData, bool flipY) noexcept
+    {
+        // open file in binary mode
+        FILE* file = fopenSafe(filepath, "rb");
+        if (!file)
+        {
+            VK_LOG_ERROR("Texture::loadImageData :: failed to open texture file: %s", filepath.c_str());
+            return false;
+        }
+
+        // set vertical flip
         stbi_set_flip_vertically_on_load(flipY); 
 
         // check if the image is HDR
@@ -143,24 +243,14 @@ namespace keplar
         // close file 
         fclose(file);
 
-        // create vulkan image from loaded image info
-        if (!createImage(device, commandPool, imageData, genMips))
+        // validate image data
+        if (!imageData.pixels || imageData.width <= 0 || imageData.height <= 0)
         {
-            VK_LOG_DEBUG("failed to create vulkan image from loaded image info: %s", filepath.c_str());
-            stbi_image_free(imageData.pixels);
+            VK_LOG_ERROR("Texture::loadImageData :: stbi failed to load pixel data or invalid dimensions: %s (%dx%d)", filepath.c_str(), imageData.width, imageData.height);
+            if (imageData.pixels) { stbi_image_free(imageData.pixels); }
             return false;
         }
 
-        // create vulkan image view for sampling
-        if (!createImageView())
-        {
-            VK_LOG_ERROR("failed to create image view for texture: %s", filepath.c_str());
-            stbi_image_free(imageData.pixels);
-            return false;
-        }
-
-        // cleanup and return success
-        stbi_image_free(imageData.pixels);
         return true;
     }
 
@@ -187,13 +277,12 @@ namespace keplar
 
     bool Texture::createImage(const VulkanDevice& device, const VulkanCommandPool& commandPool, const ImageData& imageData, bool genMips) noexcept
     {
-        // store vulkan device handle
-        m_vkDevice = device.getDevice();
-
-        // set texture metadata
+        // set device and image metadata
+        m_vkDevice  = device.getDevice();
         m_width     = imageData.width;
         m_height    = imageData.height;
         m_channels  = imageData.channels;
+        m_format    = imageData.hdr ? VK_FORMAT_R32G32B32A32_SFLOAT : VK_FORMAT_R8G8B8A8_SRGB;
         m_mipLevels = 1;
 
         // compute mip levels
@@ -287,7 +376,7 @@ namespace keplar
         imageCreateInfo.pNext = nullptr;
         imageCreateInfo.flags = 0;
         imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-        imageCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        imageCreateInfo.format = m_format;
         imageCreateInfo.extent.width = m_width;
         imageCreateInfo.extent.height = m_height;
         imageCreateInfo.extent.depth = 1;
@@ -494,7 +583,7 @@ namespace keplar
         imageViewCreateInfo.pNext = nullptr;
         imageViewCreateInfo.flags = 0;
         imageViewCreateInfo.image = m_vkImage;
-        imageViewCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        imageViewCreateInfo.format = m_format;
         imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
         imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
         imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;

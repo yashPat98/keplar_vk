@@ -5,6 +5,8 @@
 #pragma once
 
 #include <string>
+
+#include "asset_io.hpp"
 #include "vulkan/vulkan_config.hpp"
 
 namespace keplar
@@ -31,6 +33,7 @@ namespace keplar
 
             // usage
             bool load(const VulkanDevice& device, const VulkanCommandPool& commandPool, const std::string& filepath, bool flipY = false, bool genMips = true) noexcept;
+            bool load(const VulkanDevice& device, const VulkanCommandPool& commandPool, const tinygltf::Image& gltfImage, bool genMips = true) noexcept;
             void destroy() noexcept;
 
             // accessors
@@ -42,6 +45,7 @@ namespace keplar
             uint32_t    getChannels() const noexcept    { return m_channels; }
 
         private:
+            bool loadImageData(const std::string& filepath, ImageData& imageData, bool flipY = true) noexcept;
             bool createImage(const VulkanDevice& device, const VulkanCommandPool& commandPool, const ImageData& imageData, bool genMips) noexcept;
             bool createImageView() noexcept;
             void generateMipmaps(VkCommandBuffer commandBuffer) noexcept;
@@ -63,6 +67,7 @@ namespace keplar
             uint32_t m_height;
             uint32_t m_channels;
             uint32_t m_mipLevels;
+            VkFormat m_format;
     };  
 }   // namespace keplar
 

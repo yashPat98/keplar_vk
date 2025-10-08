@@ -41,7 +41,7 @@ namespace keplar
             bool initialize(const VulkanDevice& device) noexcept;
             void destroy() noexcept;
 
-            VkSampler get(Type type) { return m_samplers[static_cast<size_t>(type)]; }
+            VkSampler get(Type type) const noexcept { return m_samplers[static_cast<size_t>(type)]; }
  
         private:
             VkDevice m_vkDevice;
