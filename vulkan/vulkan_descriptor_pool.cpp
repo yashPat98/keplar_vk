@@ -95,6 +95,7 @@ namespace keplar
         // descriptor pool creation info structure
         VkDescriptorPoolCreateInfo poolCreateInfo{};
         poolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
         poolCreateInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
         poolCreateInfo.pPoolSizes = poolSizes.data();
         poolCreateInfo.maxSets = m_requirements.mMaxSets;

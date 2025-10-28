@@ -27,23 +27,27 @@ namespace keplar
             VulkanCommandBuffer& operator=(VulkanCommandBuffer&&) noexcept; 
 
             // command recording
-            bool begin(VkCommandBufferUsageFlags flags = 0) noexcept;
-            bool end() noexcept;
-            bool reset(VkCommandBufferResetFlags flags = 0) noexcept;
+            bool begin(VkCommandBufferUsageFlags flags = 0) const noexcept;
+            bool end() const noexcept;
+            bool reset(VkCommandBufferResetFlags flags = 0) const noexcept;
 
             // render pass helpers
-            void beginRenderPass(const VkRenderPassBeginInfo& beginInfo, VkSubpassContents contents) noexcept;
-            void endRenderPass() noexcept;
+            void beginRenderPass(const VkRenderPassBeginInfo& beginInfo, VkSubpassContents contents) const noexcept;
+            void endRenderPass() const noexcept;
   
             // copy helpers
-            void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t regionCount, const VkBufferCopy* copyRegions) noexcept;
+            void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t regionCount, const VkBufferCopy* copyRegions) const noexcept;
 
             // draw helpers
-            void bindPipeline(VkPipelineBindPoint bindPoint, VkPipeline pipeline) noexcept;
+            void bindPipeline(VkPipelineBindPoint bindPoint, VkPipeline pipeline) const noexcept;
             void bindDescriptorSets(VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t firstSet, uint32_t descriptorSetCount, 
-                const VkDescriptorSet* pDescriptorSets, uint32_t dynamicOffsetCount = 0, const uint32_t* pDynamicOffsets = nullptr) noexcept;
-            void bindVertexBuffers(uint32_t firstBinding, uint32_t bindingCount, const VkBuffer* pBuffers, const VkDeviceSize* pOffsets) noexcept;
-            void draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) noexcept;
+                const VkDescriptorSet* pDescriptorSets, uint32_t dynamicOffsetCount = 0, const uint32_t* pDynamicOffsets = nullptr) const noexcept;
+            void bindVertexBuffers(uint32_t firstBinding, uint32_t bindingCount, const VkBuffer* pBuffers, const VkDeviceSize* pOffsets) const noexcept;
+            void draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) const noexcept;
+
+            // pipeline barrier
+            void transitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout,
+                const VkImageSubresourceRange& subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }) const noexcept;
 
             // accessor
             VkCommandBuffer get() const noexcept { return m_vkCommandBuffer; }

@@ -9,6 +9,7 @@
 #include "vulkan_context.hpp"
 #include "vulkan_surface.hpp"
 #include "vulkan_device.hpp"
+#include "vulkan_command_buffer.hpp"
 #include "vulkan_utils.hpp"
 #include "utils/logger.hpp"
 
@@ -473,6 +474,28 @@ namespace keplar
 
         VK_LOG_DEBUG("swapchain depth image and view are created successfully");
         return true;
+    }
+
+    void VulkanSwapchain::transitionForRendering(VulkanCommandBuffer commandBuffer, uint32_t imageIndex) const noexcept
+    {
+        if (imageIndex >= m_imageCount)
+        {
+            VK_LOG_WARN("VulkanSwapchain::transitionForRendering : invalid imageIndex: %d", imageIndex);
+            return;
+        }
+
+        commandBuffer.transitionImageLayout(m_colorImages[imageIndex], VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    }
+    
+    void VulkanSwapchain::transitionForPresentation(VulkanCommandBuffer commandBuffer, uint32_t imageIndex) const noexcept
+    {
+        if (imageIndex >= m_imageCount)
+        {
+            VK_LOG_WARN("VulkanSwapchain::transitionForPresentation : invalid imageIndex: %d", imageIndex);
+            return;
+        }
+
+        commandBuffer.transitionImageLayout(m_colorImages[imageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
     }
 
     void VulkanSwapchain::destroyAttachments() noexcept

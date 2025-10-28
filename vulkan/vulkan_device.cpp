@@ -168,7 +168,7 @@ namespace keplar
             }
         }
 
-        VK_LOG_ERROR("No suitable memory type found for properties: %s", string_VkMemoryPropertyFlags(propertyFlags).c_str());
+        VK_LOG_DEBUG("No suitable memory type found for properties: %s", string_VkMemoryPropertyFlags(propertyFlags).c_str());
         return std::nullopt;
     }
 

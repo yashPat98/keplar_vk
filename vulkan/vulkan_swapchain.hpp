@@ -13,6 +13,7 @@ namespace keplar
     class VulkanContext;
     class VulkanSurface;
     class VulkanDevice;
+    class VulkanCommandBuffer;
     struct QueueFamilyIndices;
 
     class VulkanSwapchain final 
@@ -45,6 +46,10 @@ namespace keplar
             VkFormat                        getDepthFormat() const noexcept        { return m_depthFormat; }
             VkColorSpaceKHR                 getColorSpace() const noexcept         { return m_vkSurfaceFormatKHR.colorSpace; }
             VkPresentModeKHR                getPresentMode() const noexcept        { return m_vkPresentModeKHR; }
+
+            // swapchain image layout transition helpers
+            void transitionForRendering(VulkanCommandBuffer commandBuffer, uint32_t imageIndex) const noexcept;
+            void transitionForPresentation(VulkanCommandBuffer commandBuffer, uint32_t imageIndex) const noexcept;
 
         private:
             // initialization helpers
