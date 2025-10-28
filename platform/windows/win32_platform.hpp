@@ -13,6 +13,7 @@ namespace keplar
     class Win32Platform : public Platform
     {
         public:
+            // creation and destruction
             Win32Platform() noexcept;
             virtual ~Win32Platform() override;
 
@@ -30,6 +31,7 @@ namespace keplar
             // event listeners
             virtual void addListener(const std::shared_ptr<EventListener>& listener) noexcept override;
             virtual void removeListener(const std::shared_ptr<EventListener>& listener) noexcept override;
+            virtual void enableImGuiEvents(bool enabled) noexcept override;
 
             // vulkan 
             virtual VkSurfaceKHR createSurface(VkInstance vkInstance) const noexcept override;
@@ -49,6 +51,9 @@ namespace keplar
             uint32_t            m_height;
             bool                m_shouldClose;
             bool                m_isFullscreen;
+
+            // input/event handling
             EventManager        m_eventManager;
+            bool                m_imguiEvents;
     };
 }   // namespace keplar

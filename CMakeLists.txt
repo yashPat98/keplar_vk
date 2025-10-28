@@ -99,20 +99,43 @@ include_directories(
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/external/glm
     ${CMAKE_SOURCE_DIR}/external/tinygltf
+    ${CMAKE_SOURCE_DIR}/external/imgui 
+    ${CMAKE_SOURCE_DIR}/external/imgui/backends
 )
+
+# ───────────────────────────────────────────────
+# ImGui Integration
+# ───────────────────────────────────────────────
+set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/external/imgui)
+file(GLOB IMGUI_SRC 
+    ${IMGUI_DIR}/*.cpp 
+    ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+)
+
+# platform-specific backend
+if(WIN32)
+    list(APPEND IMGUI_SRC ${IMGUI_DIR}/backends/imgui_impl_win32.cpp)
+elseif(UNIX)
+    list(APPEND IMGUI_SRC ${IMGUI_DIR}/backends/imgui_impl_x11.cpp)
+endif()
+
+add_library(imgui STATIC ${IMGUI_SRC})
 
 # ───────────────────────────────────────────────
 # Executable Target
 # ───────────────────────────────────────────────
-add_executable(keplar WIN32 ${KEPLAR_SRC})
-
-if(MSVC)
+if(WIN32)
+    # windows
+    add_executable(keplar WIN32 ${KEPLAR_SRC})
     target_compile_options(keplar PRIVATE /W4 /WX)
 else()
+    # linux
+    add_executable(keplar ${KEPLAR_SRC})
     target_compile_options(keplar PRIVATE -Wall -Wextra -Werror)
 endif()
 
-target_link_libraries(keplar PRIVATE Vulkan::Vulkan)
+target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
+target_link_libraries(keplar PRIVATE imgui)
 
 # ───────────────────────────────────────────────
 # Visual Studio Groups

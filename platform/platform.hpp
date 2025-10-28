@@ -32,6 +32,7 @@ namespace keplar
             // event listeners
             virtual void addListener(const std::shared_ptr<EventListener>& listener) noexcept = 0;
             virtual void removeListener(const std::shared_ptr<EventListener>& listener) noexcept = 0;
+            virtual void enableImGuiEvents(bool enabled) noexcept = 0;
 
             // vulkan 
             virtual VkSurfaceKHR createSurface(VkInstance vkInstance) const noexcept = 0;

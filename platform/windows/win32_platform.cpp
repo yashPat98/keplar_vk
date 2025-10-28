@@ -7,6 +7,9 @@
 #include "utils/logger.hpp"
 #include "vulkan/vulkan_utils.hpp"
 
+// forward declaration of ImGui message handler
+extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
 namespace 
 {
     static constexpr int kMinWindowWidth  = 1280;
@@ -23,6 +26,7 @@ namespace keplar
         , m_height(0)
         , m_shouldClose(false)
         , m_isFullscreen(false)
+        , m_imguiEvents(false)
     {
     }
 
@@ -83,6 +87,7 @@ namespace keplar
 
         // store this pointer for message routing
         SetWindowLongPtr(m_hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+        FreeConsole();
         ShowWindow(m_hwnd, maximized ? SW_MAXIMIZE : SW_SHOWDEFAULT);
 		SetForegroundWindow(m_hwnd);
 		SetFocus(m_hwnd);
@@ -152,6 +157,11 @@ namespace keplar
         m_eventManager.removeListener(listener);
     }
 
+    void Win32Platform::enableImGuiEvents(bool enabled) noexcept 
+    {
+        m_imguiEvents = enabled;
+    }
+
     VkSurfaceKHR Win32Platform::createSurface(VkInstance vkInstance) const noexcept
     {
         VkSurfaceKHR vkSurfaceKHR = VK_NULL_HANDLE;  
@@ -183,6 +193,11 @@ namespace keplar
         if (!platform)
         {
             return DefWindowProc(hwnd, iMsg, wParam, lParam);
+        }
+
+        if (platform->m_imguiEvents)
+        {
+            ImGui_ImplWin32_WndProcHandler(hwnd, iMsg, wParam, lParam);
         }
 
         switch (iMsg)
