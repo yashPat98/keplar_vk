@@ -25,6 +25,7 @@
 #include "vulkan/vulkan_samplers.hpp"
 
 #include "graphics/msaa_target.hpp"
+#include "graphics/frame_limiter.hpp"
 #include "graphics/camera.hpp"
 #include "graphics/texture.hpp"
 #include "shader_structs.hpp"
@@ -40,9 +41,8 @@ namespace keplar
 
             // core renderer interface: initialize, update, render, configure
             virtual bool initialize(std::weak_ptr<Platform> platform, std::weak_ptr<VulkanContext> context) noexcept override;
-            virtual bool update(float dt) noexcept override;
             virtual bool renderFrame() noexcept override;
-            virtual void setupVulkanConfig(VulkanContextConfig& config) noexcept override;
+            virtual void configureVulkan(VulkanContextConfig& config) noexcept override;
 
             // handle window and user input events
             virtual void onWindowResize(uint32_t, uint32_t) override;
@@ -66,8 +66,8 @@ namespace keplar
             bool createSyncPrimitives() noexcept;
             bool buildCommandBuffers() noexcept;
             bool prepareScene() noexcept;
-            bool updateUniformBuffer() noexcept;
-
+            bool updateFrame(uint32_t frameIndex) noexcept;
+            
         private:
             // per frame sync primitives
             struct FrameSyncPrimitives
@@ -112,6 +112,7 @@ namespace keplar
             VulkanRenderPass                    m_renderPass;
             std::vector<VulkanFramebuffer>      m_framebuffers;
             std::vector<FrameSyncPrimitives>    m_frameSyncPrimitives;
+            FrameLimiter                        m_frameLimiter;
             
             // shaders and pipeline
             VulkanShader                        m_vertexShader;
@@ -130,10 +131,8 @@ namespace keplar
             std::vector<VkDescriptorSet>        m_descriptorSets;
             std::vector<ubo::FrameData>         m_uboFrameData;
 
-            // main camera
+            // scene resources
             std::shared_ptr<Camera>             m_camera;
-
-            // texture
             Texture                             m_texture;
     };
 }   // namespace keplar

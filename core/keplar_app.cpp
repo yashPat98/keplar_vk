@@ -49,24 +49,15 @@ namespace keplar
 
     int KeplarApp::run() noexcept
     {
-        // track time of previous frame for delta time calculation
-        using clock = std::chrono::high_resolution_clock;
-        auto lastTime = clock::now();
-
         while (!m_platform->shouldClose())
         {
-            // process OS/window events
+            // process platform events
             m_platform->pollEvents();
 
-            // compute delta time since last frame (seconds)
-            auto currentTime = clock::now();
-            float dt = std::chrono::duration<float>(currentTime - lastTime).count();
-            lastTime = currentTime;
-
             // update and submit current frame for rendering
-            if (!m_renderer->update(dt) || !m_renderer->renderFrame())
+            if (!m_renderer->renderFrame()) 
             {
-                return EXIT_FAILURE;
+                return EXIT_FAILURE; 
             }
         }
 
@@ -116,7 +107,7 @@ namespace keplar
         }
 
         // allow renderer to configure vulkan context
-        m_renderer->setupVulkanConfig(config);
+        m_renderer->configureVulkan(config);
 
         // build vulkan context using platform and config
         m_vulkanContext = VulkanContext::Builder()

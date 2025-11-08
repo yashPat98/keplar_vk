@@ -17,10 +17,9 @@ namespace keplar
 
             // core per-frame renderer interface: initialize resources, update state, and submit frames
             virtual bool initialize(std::weak_ptr<Platform> platform, std::weak_ptr<VulkanContext> context) noexcept = 0;
-            virtual bool update(float dt) noexcept = 0;
             virtual bool renderFrame() noexcept = 0;
 
             // configure vulkan instance, layers, extensions, features, and queue preferences
-            virtual void setupVulkanConfig(VulkanContextConfig& /* config */) noexcept {}
+            virtual void configureVulkan(VulkanContextConfig& /* config */) noexcept {}
     };
 }   // namespace keplar

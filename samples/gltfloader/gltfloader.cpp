@@ -98,34 +98,33 @@ namespace keplar
         return true;
     }
 
-    bool GLTFLoader::update(float dt) noexcept
-    {
-        // update camera 
-        m_camera->update(dt);
-        return true;
-    }
-
     bool GLTFLoader::renderFrame() noexcept
     {
-        // 1️⃣ skip frame if renderer is not ready
+        // skip frame if renderer is not ready
         if (!m_readyToRender.load())
         {
-            VK_LOG_DEBUG("GLTFLoader::renderFrame skipped: renderer not ready");
+            VK_LOG_DEBUG("GLTFLoader::beginFrame skipped: renderer not ready");
             return true;
         }
 
-        // 2️⃣ get sync primitives for current frame
+        // wait on the fence for this frame to ensure gpu finished work from last time
+        // this prevents cpu from submitting commands for the same frame while gpu is still using it
         auto& frameSync = m_frameSyncPrimitives[m_currentFrameIndex];
-
-        // 3️⃣ wait on the fence for this frame to ensure GPU finished work from last time
-        // This prevents CPU from submitting commands for the same frame while GPU is still using it
         if (!frameSync.mInFlightFence.wait() || !frameSync.mInFlightFence.reset())
         {
             return false;
         }
 
-        // 4️⃣ acquire next image from swapchain, signaling the image available semaphore 
-        VkResult vkResult = vkAcquireNextImageKHR(m_vkDevice, m_vkSwapchainKHR, UINT64_MAX, frameSync.mImageAvailableSemaphore.get(), VK_NULL_HANDLE, &m_currentImageIndex);
+        // wait on cpu to maintain target frame rate
+        m_frameLimiter.waitForNextFrame();
+
+        // frame-specific semaphores and fence
+        const auto imageAcquireSemaphore    = frameSync.mImageAvailableSemaphore.get();
+        const auto renderCompleteSemaphore  = frameSync.mRenderCompleteSemaphore.get();
+        const auto inFlightFence            = frameSync.mInFlightFence.get();
+
+        // acquire next image from swapchain, signaling the image available semaphore 
+        VkResult vkResult = vkAcquireNextImageKHR(m_vkDevice, m_vkSwapchainKHR, UINT64_MAX, imageAcquireSemaphore, VK_NULL_HANDLE, &m_currentImageIndex);
         if (vkResult == VK_ERROR_OUT_OF_DATE_KHR || vkResult == VK_SUBOPTIMAL_KHR)
         {
             VK_LOG_DEBUG("vkAcquireNextImageKHR failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
@@ -138,44 +137,45 @@ namespace keplar
             return false;
         }
 
-        // 5️⃣ update uniform buffer for the current frame
-        updateUniformBuffer();
-
-        // 6️⃣ prepare submit info to submit command buffer with sync info
-        const VkPipelineStageFlags waitDstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        VkSemaphore waitSemaphore = frameSync.mImageAvailableSemaphore.get();
-        VkSemaphore signalSemaphore = frameSync.mRenderCompleteSemaphore.get();
-        VkCommandBuffer commandBuffer = m_commandBuffers[m_currentImageIndex].get();
-
-        // setup queue submit info
-        VkSubmitInfo submitInfo{};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.pNext = nullptr;
-        submitInfo.pWaitDstStageMask = &waitDstStageMask;
-        submitInfo.waitSemaphoreCount = 1;
-        submitInfo.pWaitSemaphores = &waitSemaphore;
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &commandBuffer;
-        submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores = &signalSemaphore;
-
-        // 7️⃣ submit command buffer to graphics queue with fence to track GPU work
-        if (!VK_CHECK(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, frameSync.mInFlightFence.get())))
+        // update per-frame data
+        if (!updateFrame(m_currentFrameIndex))
         {
             return false;
         }
 
-        // 8️⃣ prepare present info to present the rendered image
-        VkPresentInfoKHR presentInfo{};
-        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        presentInfo.pNext = nullptr;
-        presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores = &signalSemaphore;
-        presentInfo.swapchainCount = 1;
-        presentInfo.pSwapchains = &m_vkSwapchainKHR;
-        presentInfo.pImageIndices = &m_currentImageIndex;
+        // prepare command buffers to submit 
+        VkCommandBuffer commandBuffer = m_commandBuffers[m_currentImageIndex].get();
+        const VkPipelineStageFlags waitDstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-        // 9️⃣ queue the present operation
+        // setup queue submit info
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType                 = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.pNext                 = nullptr;
+        submitInfo.pWaitDstStageMask     = &waitDstStageMask;
+        submitInfo.waitSemaphoreCount    = 1;
+        submitInfo.pWaitSemaphores       = &imageAcquireSemaphore;
+        submitInfo.commandBufferCount    = 1;
+        submitInfo.pCommandBuffers       = &commandBuffer;
+        submitInfo.signalSemaphoreCount  = 1;
+        submitInfo.pSignalSemaphores     = &renderCompleteSemaphore;
+
+        // submit command buffer to graphics queue with fence to track GPU work
+        if (!VK_CHECK(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, inFlightFence)))
+        {
+            return false;
+        }
+
+        // prepare present info to present the rendered image
+        VkPresentInfoKHR presentInfo{};
+        presentInfo.sType               = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.pNext               = nullptr;
+        presentInfo.waitSemaphoreCount  = 1;
+        presentInfo.pWaitSemaphores     = &renderCompleteSemaphore;
+        presentInfo.swapchainCount      = 1;
+        presentInfo.pSwapchains         = &m_vkSwapchainKHR;
+        presentInfo.pImageIndices       = &m_currentImageIndex;
+
+        // queue the present operation
         vkResult = vkQueuePresentKHR(m_presentQueue, &presentInfo);
         if (vkResult == VK_ERROR_OUT_OF_DATE_KHR || vkResult == VK_SUBOPTIMAL_KHR)
         {
@@ -189,12 +189,34 @@ namespace keplar
             return false;
         }
 
-        // 🔟 advance to the next frame sync object (cycling through available frames in flight)
+        // advance to the next frame sync object (cycling through available frames in flight)
         m_currentFrameIndex = (m_currentFrameIndex + 1) % m_maxFramesInFlight;
         return true;
     }
 
-    void GLTFLoader::setupVulkanConfig(VulkanContextConfig& config) noexcept
+    bool GLTFLoader::updateFrame(uint32_t frameIndex) noexcept
+    {
+        // update camera 
+        float dt = m_frameLimiter.getDeltaTime();
+        m_camera->update(dt);
+
+        // setup uniform data
+        ubo::FrameData& frameData = m_uboFrameData[frameIndex];
+        frameData.model      = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
+        frameData.view       = m_camera->getViewMatrix();
+        frameData.projection = m_camera->getProjectionMatrix();
+
+        // upload to uniform buffer
+        if (!m_uniformBuffers[frameIndex].uploadHostVisible(&frameData, sizeof(frameData)))
+        {
+            VK_LOG_ERROR("GLTFLoader::updateFrame failed for frame: %d", frameIndex);
+            return false;
+        }
+
+        return true;
+    }
+
+    void GLTFLoader::configureVulkan(VulkanContextConfig& config) noexcept
     {
         // enable sampler anisotropy for higher quality texture filtering
         config.mRequestedFeatures.samplerAnisotropy = VK_TRUE;
@@ -935,7 +957,7 @@ namespace keplar
     {
         // calculate aspect ratio of window and initialize camera
         const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
-        m_camera = std::make_shared<Camera>(45.0f, aspectRatio, 0.1f, 100.0f, true);
+        m_camera = std::make_shared<Camera>(45.0f, aspectRatio, 0.1f, 100.0f);
 
         // register listeners with the platform
         if (auto platform = m_platform.lock())
@@ -945,24 +967,6 @@ namespace keplar
 
         // mark ready for render
         m_readyToRender.store(true);
-        return true;
-    }
-
-    bool GLTFLoader::updateUniformBuffer() noexcept
-    {
-        // setup uniform data
-        ubo::FrameData& frameData = m_uboFrameData[m_currentImageIndex];
-        frameData.model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
-        frameData.view = m_camera->getViewMatrix();
-        frameData.projection = m_camera->getProjectionMatrix();
-
-        // upload to uniform buffer
-        if (!m_uniformBuffers[m_currentImageIndex].uploadHostVisible(&frameData, sizeof(frameData)))
-        {
-            VK_LOG_ERROR("GLTFLoader::updateUniformBuffers failed for frame: %d", m_currentImageIndex);
-            return false;
-        }
-        
         return true;
     }
 }   // namespace keplar

@@ -94,7 +94,7 @@ namespace keplar
         return VK_CHECK(vkWaitForFences(m_vkDevice, 1, &m_vkFence, VK_TRUE, timeout));
     }
 
-    bool VulkanFence::reset() noexcept
+    bool VulkanFence::reset() const noexcept
     {
         if (m_vkFence == VK_NULL_HANDLE)
         {
@@ -105,7 +105,7 @@ namespace keplar
         return VK_CHECK(vkResetFences(m_vkDevice, 1, &m_vkFence));
     }
 
-    VkResult VulkanFence::isSignaled() noexcept
+    VkResult VulkanFence::isSignaled() const noexcept
     {
         if (m_vkFence == VK_NULL_HANDLE)
         {
