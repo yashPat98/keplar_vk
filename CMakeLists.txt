@@ -31,15 +31,17 @@ set(KEPLAR_SAMPLES
     TRIANGLE
     TEXTURE
     GLTFLOADER
+    PBR
 )
 
 if(NOT DEFINED KEPLAR_SAMPLE)
     message(FATAL_ERROR
         "❌ No sample selected.\n"
         "Please configure with one of the following flags:\n"
-        "  -DKEPLAR_SAMPLE=TRIANGLE   # Build the Triangle sample\n"
-        "  -DKEPLAR_SAMPLE=TEXTURE    # Build the Texture sample\n"
-        "  -DKEPLAR_SAMPLE=GLTFLOADER # Build the Texture sample\n"
+        "  -DKEPLAR_SAMPLE=TRIANGLE   \n"
+        "  -DKEPLAR_SAMPLE=TEXTURE    \n"
+        "  -DKEPLAR_SAMPLE=GLTFLOADER \n"
+        "  -DKEPLAR_SAMPLE=PBR        \n"
     )
 endif()
 

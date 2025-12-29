@@ -957,7 +957,7 @@ namespace keplar
     {
         // calculate aspect ratio of window and initialize camera
         const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
-        m_camera = std::make_shared<Camera>(45.0f, aspectRatio, 0.1f, 100.0f);
+        m_camera = std::make_shared<Camera>(45.0f, aspectRatio, 0.1f, 100.0f, true);
 
         // register listeners with the platform
         if (auto platform = m_platform.lock())
