@@ -36,7 +36,6 @@ namespace keplar
         int   width     = 0;
         int   height    = 0;
         int   channels  = 0;
-        bool  hdr       = false;
     };
 
     Texture::Texture() noexcept
@@ -114,7 +113,7 @@ namespace keplar
         return *this;
     }
 
-    bool Texture::load(const VulkanDevice& device, const VulkanCommandPool& commandPool, const std::string& filepath, bool flipY, bool genMips) noexcept
+    bool Texture::load(const VulkanDevice& device, const VulkanCommandPool& commandPool, const std::string& filepath, const VkFormat& format, bool flipY, bool genMips) noexcept
     {
         // image info container
         ImageData imageData{};
@@ -128,7 +127,7 @@ namespace keplar
         }
 
         // create vulkan image from loaded image info
-        if (!createImage(device, commandPool, imageData, genMips))
+        if (!createImage(device, commandPool, imageData, format, genMips))
         {
             VK_LOG_DEBUG("Texture::load :: failed to create vulkan image from loaded image info: %s", filepath.c_str());
             stbi_image_free(imageData.pixels);
@@ -148,7 +147,7 @@ namespace keplar
         return true;
     }
 
-    bool Texture::load(const VulkanDevice& device, const VulkanCommandPool& commandPool, const tinygltf::Image& gltfImage, bool genMips) noexcept
+    bool Texture::load(const VulkanDevice& device, const VulkanCommandPool& commandPool, const tinygltf::Image& gltfImage, const VkFormat& format, bool genMips) noexcept
     {
         // image info container
         ImageData imageData{};
@@ -162,7 +161,6 @@ namespace keplar
             imageData.width    = gltfImage.width;
             imageData.height   = gltfImage.height;
             imageData.channels = gltfImage.component;
-            imageData.hdr      = false; 
             imageName          = !gltfImage.name.empty() ? gltfImage.name : "embedded_image";
             isEmbedded         = true;
 
@@ -190,7 +188,7 @@ namespace keplar
         }
 
         // create vulkan image from loaded image info
-        if (!createImage(device, commandPool, imageData, genMips))
+        if (!createImage(device, commandPool, imageData, format, genMips))
         {
             VK_LOG_DEBUG("Texture::load :: failed to create vulkan image for loaded glTF image: %s", imageName.c_str());
             if (!isEmbedded) { stbi_image_free(imageData.pixels); }
@@ -227,18 +225,8 @@ namespace keplar
         // set vertical flip
         stbi_set_flip_vertically_on_load(flipY); 
 
-        // check if the image is HDR
-        imageData.hdr = stbi_is_hdr_from_file(file);
-        if (imageData.hdr)
-        {
-            // load image data as float
-            imageData.pixels = stbi_loadf_from_file(file, &imageData.width, &imageData.height, &imageData.channels, STBI_rgb_alpha);
-        }
-        else
-        {
-            // load image data as unsigned byte 
-            imageData.pixels = stbi_load_from_file(file, &imageData.width, &imageData.height, &imageData.channels, STBI_rgb_alpha);
-        }
+        // load image data as unsigned byte 
+        imageData.pixels = stbi_load_from_file(file, &imageData.width, &imageData.height, &imageData.channels, STBI_rgb_alpha);
 
         // close file 
         fclose(file);
@@ -275,14 +263,14 @@ namespace keplar
         }
     }
 
-    bool Texture::createImage(const VulkanDevice& device, const VulkanCommandPool& commandPool, const ImageData& imageData, bool genMips) noexcept
+    bool Texture::createImage(const VulkanDevice& device, const VulkanCommandPool& commandPool, const ImageData& imageData, const VkFormat& format, bool genMips) noexcept
     {
         // set device and image metadata
         m_vkDevice  = device.getDevice();
         m_width     = imageData.width;
         m_height    = imageData.height;
         m_channels  = imageData.channels;
-        m_format    = imageData.hdr ? VK_FORMAT_R32G32B32A32_SFLOAT : VK_FORMAT_R8G8B8A8_SRGB;
+        m_format    = format;
         m_mipLevels = 1;
 
         // compute mip levels
@@ -293,7 +281,7 @@ namespace keplar
         }
 
         // compute image size
-        VkDeviceSize imageSize = m_width * m_height * m_channels * (imageData.hdr ? sizeof(float) : sizeof(uint8_t));
+        VkDeviceSize imageSize = m_width * m_height * m_channels * sizeof(uint8_t);
   
         // ------------------------------------------
         // ▶ step 1: create host-visible staging buffer and copy image data

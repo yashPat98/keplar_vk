@@ -440,7 +440,7 @@ namespace keplar
     bool TextureSample::createTextures(const VulkanDevice& device) noexcept
     {
         // load texture from file
-        if (!m_texture.load(device, m_commandPool, "cloth.png", true))
+        if (!m_texture.load(device, m_commandPool, "cloth.png", VK_FORMAT_R8G8B8A8_UNORM, true))
         {
             VK_LOG_ERROR("TextureSample::createTextures failed to load texture");
             return false;

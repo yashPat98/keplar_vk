@@ -442,6 +442,7 @@ namespace keplar
         // aggregated vertex/index data from all meshes
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
+        bool hasTangents = false;
 
         // pre-allocate vectors
         m_meshes.reserve(model.meshes.size());
@@ -516,6 +517,7 @@ namespace keplar
                     const auto& view     = model.bufferViews[accessor.bufferView];
                     tangentBuffer        = reinterpret_cast<const float*>(&model.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]);
                     tangentStride        = view.byteStride ? view.byteStride / sizeof(float) : 4;
+                    hasTangents          = true;
                 }
 
                 // append vertex data for current primitive
@@ -576,6 +578,11 @@ namespace keplar
                 indexOffset += static_cast<uint32_t>(indexAccessor.count);
             }
             m_meshes.emplace_back(std::move(mesh));
+        }
+
+        if (!hasTangents)
+        {
+            generateTangents(vertices, indices);
         }
 
         // create device-local vertex buffer: positions, normals, uvs, tangents
@@ -726,6 +733,38 @@ namespace keplar
         m_textures.clear();
         m_textures.reserve(model.images.size());
 
+        // prepare an array of VkFormat per image defaulting to UNORM
+        std::vector<VkFormat> textureFormats(model.images.size(), VK_FORMAT_R8G8B8A8_UNORM);
+
+        // assign sRGB to color textures based on materials
+        for (const auto& gltfMaterial : model.materials)
+        {
+            auto setFormat = [&](int textureIndex, bool isColor)
+            {
+                if (textureIndex < 0 || textureIndex >= static_cast<int>(model.textures.size()))
+                    return;
+
+                int imageIndex = model.textures[textureIndex].source;
+                if (imageIndex < 0 || imageIndex >= static_cast<int>(textureFormats.size()))
+                    return;
+
+                if (isColor)
+                {
+                    textureFormats[imageIndex] = VK_FORMAT_R8G8B8A8_SRGB;
+                }
+                else if (textureFormats[imageIndex] != VK_FORMAT_R8G8B8A8_SRGB)
+                {
+                    textureFormats[imageIndex] = VK_FORMAT_R8G8B8A8_UNORM;
+                }
+            };
+
+            setFormat(gltfMaterial.pbrMetallicRoughness.baseColorTexture.index, true);
+            setFormat(gltfMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index, false);
+            setFormat(gltfMaterial.normalTexture.index, false);
+            setFormat(gltfMaterial.occlusionTexture.index, false);
+            setFormat(gltfMaterial.emissiveTexture.index, true);
+        }
+
         // lambda to decide if mipmaps should be generated
         auto shouldGenerateMipmaps = [](const tinygltf::Image& image) noexcept -> bool 
         {
@@ -737,10 +776,13 @@ namespace keplar
         };
 
         // load each glTF image as a vulkan texture
-        for (const auto& gltfImage : model.images)
+        for (size_t i = 0; i < model.images.size(); ++i)
         {
+            const auto& gltfImage = model.images[i];
+            VkFormat& format = textureFormats[i];
+
             Texture texture;
-            if (!texture.load(device, commandPool, gltfImage, shouldGenerateMipmaps(gltfImage)))
+            if (!texture.load(device, commandPool, gltfImage, format, shouldGenerateMipmaps(gltfImage)))
             {
                 VK_LOG_ERROR("Model::loadTextures :: failed to load texture: %s", gltfImage.uri.c_str());
                 return false;
@@ -805,6 +847,61 @@ namespace keplar
 
         VK_LOG_DEBUG("GLTFModel::loadMaterials :: materials loaded successfullt: %zu", m_materials.size());
         return true;
+    }
+
+    void GLTFModel::generateTangents(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices) noexcept
+    {
+        std::vector<glm::vec3> tan1(vertices.size(), glm::vec3(0.0f));
+        std::vector<glm::vec3> tan2(vertices.size(), glm::vec3(0.0f));
+
+        for (size_t i = 0; i < indices.size(); i += 3)
+        {
+            uint32_t i0 = indices[i];
+            uint32_t i1 = indices[i + 1];
+            uint32_t i2 = indices[i + 2];
+
+            glm::vec3 v0 = glm::vec3(vertices[i0].mPosition);
+            glm::vec3 v1 = glm::vec3(vertices[i1].mPosition);
+            glm::vec3 v2 = glm::vec3(vertices[i2].mPosition);
+
+            glm::vec2 w0 = vertices[i0].mUV;
+            glm::vec2 w1 = vertices[i1].mUV;
+            glm::vec2 w2 = vertices[i2].mUV;
+
+            glm::vec3 edge1 = v1 - v0;
+            glm::vec3 edge2 = v2 - v0;
+
+            glm::vec2 deltaUV1 = w1 - w0;
+            glm::vec2 deltaUV2 = w2 - w0;
+
+            float r = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
+            if (fabs(r) < 1e-6f) {
+                // degenerate UV, skip this triangle's tangent calculation
+                continue;
+            }
+            float f = 1.0f / r;
+
+            glm::vec3 sdir = f * (deltaUV2.y * edge1 - deltaUV1.y * edge2);
+            glm::vec3 tdir = f * (-deltaUV2.x * edge1 + deltaUV1.x * edge2);
+
+            tan1[i0] += sdir;
+            tan1[i1] += sdir;
+            tan1[i2] += sdir;
+
+            tan2[i0] += tdir;
+            tan2[i1] += tdir;
+            tan2[i2] += tdir;
+        }
+
+        for (size_t i = 0; i < vertices.size(); ++i)
+        {
+            glm::vec3 n = glm::normalize(vertices[i].mNormal);
+            glm::vec3 t = tan1[i];
+            glm::vec3 tangent = glm::normalize(t - n * glm::dot(n, t));
+
+            float handedness = (glm::dot(glm::cross(n, t), tan2[i]) < 0.0f) ? -1.0f : 1.0f;
+            vertices[i].mTangent = glm::vec4(tangent, handedness);
+        }
     }
 
     void GLTFModel::initSharedResources(VkDevice vkDevice) noexcept

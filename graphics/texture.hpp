@@ -32,8 +32,10 @@ namespace keplar
             Texture& operator=(Texture&&) noexcept;
 
             // usage
-            bool load(const VulkanDevice& device, const VulkanCommandPool& commandPool, const std::string& filepath, bool flipY = false, bool genMips = true) noexcept;
-            bool load(const VulkanDevice& device, const VulkanCommandPool& commandPool, const tinygltf::Image& gltfImage, bool genMips = true) noexcept;
+            bool load(const VulkanDevice& device, const VulkanCommandPool& commandPool, const std::string& filepath, const VkFormat& format, 
+                      bool flipY = false, bool genMips = true) noexcept;
+            bool load(const VulkanDevice& device, const VulkanCommandPool& commandPool, const tinygltf::Image& gltfImage, const VkFormat& format, 
+                      bool genMips = true) noexcept;
             void destroy() noexcept;
 
             // accessors
@@ -46,14 +48,14 @@ namespace keplar
 
         private:
             bool loadImageData(const std::string& filepath, ImageData& imageData, bool flipY = true) noexcept;
-            bool createImage(const VulkanDevice& device, const VulkanCommandPool& commandPool, const ImageData& imageData, bool genMips) noexcept;
+            bool createImage(const VulkanDevice& device, const VulkanCommandPool& commandPool, const ImageData& imageData, const VkFormat& format, bool genMips) noexcept;
             bool createImageView() noexcept;
             void generateMipmaps(VkCommandBuffer commandBuffer) noexcept;
             void transitionImageLayout(VkCommandBuffer commandBuffer, 
-                    VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage, 
-                    VkImageLayout oldLayout, VkImageLayout newLayout, 
-                    VkAccessFlags srcAccess, VkAccessFlags dstAccess, 
-                    uint32_t baseMipLevel, uint32_t levelCount) noexcept;
+                                       VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage, 
+                                       VkImageLayout oldLayout, VkImageLayout newLayout, 
+                                       VkAccessFlags srcAccess, VkAccessFlags dstAccess, 
+                                       uint32_t baseMipLevel, uint32_t levelCount) noexcept;
 
         private:
             // vulkan handles

@@ -43,13 +43,6 @@ namespace keplar
             static VkPushConstantRange getPushConstantRange() noexcept { return s_pushConstantRange; }
 
         private:
-            // internal helpers for loading model
-            bool loadMeshes(const tinygltf::Model& model, const VulkanDevice& device, const VulkanCommandPool& commandPool) noexcept;
-            bool loadSceneGraph(const tinygltf::Model& model) noexcept;
-            bool loadTextures(const tinygltf::Model& model, const VulkanDevice& device, const VulkanCommandPool& commandPool) noexcept;
-            bool loadMaterials(const tinygltf::Model& model) noexcept;
-
-        private:
             // forward declarations
             struct Vertex;
             struct Primitive;
@@ -57,7 +50,15 @@ namespace keplar
             struct Scene;
             struct Node;
             struct Material;
-            
+
+            // internal helpers for loading model
+            bool loadMeshes(const tinygltf::Model& model, const VulkanDevice& device, const VulkanCommandPool& commandPool) noexcept;
+            bool loadSceneGraph(const tinygltf::Model& model) noexcept;
+            bool loadTextures(const tinygltf::Model& model, const VulkanDevice& device, const VulkanCommandPool& commandPool) noexcept;
+            bool loadMaterials(const tinygltf::Model& model) noexcept;
+            void generateTangents(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices) noexcept;
+
+        private:
             // vulkan resources
             VkDevice              m_vkDevice;
             VulkanBuffer          m_vertexBuffer;       
