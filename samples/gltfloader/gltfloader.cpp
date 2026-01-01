@@ -574,15 +574,6 @@ namespace keplar
         colorAttachmentRef.attachment    = 0;                                       
         colorAttachmentRef.layout        = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;   
 
-        VkSubpassDependency colorDependency{};
-        colorDependency.srcSubpass       = VK_SUBPASS_EXTERNAL;
-        colorDependency.dstSubpass       = 0;
-        colorDependency.srcStageMask     = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        colorDependency.dstStageMask     = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        colorDependency.srcAccessMask    = 0;
-        colorDependency.dstAccessMask    = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-        colorDependency.dependencyFlags  = 0;
-
         // depth attachment: description, reference, subpass dependency
         VkAttachmentDescription depthAttachment{};
         depthAttachment.flags            = 0;
@@ -598,15 +589,6 @@ namespace keplar
         VkAttachmentReference depthAttachmentRef{};
         depthAttachmentRef.attachment    = msaaEnabled ? 2 : 1;
         depthAttachmentRef.layout        = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        VkSubpassDependency depthDependency{};
-        depthDependency.srcSubpass       = VK_SUBPASS_EXTERNAL;
-        depthDependency.dstSubpass       = 0;
-        depthDependency.srcStageMask     = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        depthDependency.dstStageMask     = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        depthDependency.srcAccessMask    = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        depthDependency.dstAccessMask    = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-        depthDependency.dependencyFlags  = 0;
 
         // resolve attachment: description, reference (msaa only)
         VkAttachmentDescription resolveAttachment{};
@@ -640,11 +622,10 @@ namespace keplar
         if (msaaEnabled) { attachments.emplace_back(resolveAttachment); }  
         attachments.emplace_back(depthAttachment); 
 
-        std::vector<VkSubpassDescription> subpasses { subpass };
-        std::vector<VkSubpassDependency> dependencies { depthDependency, colorDependency };   
+        std::vector<VkSubpassDescription> subpasses { subpass }; 
 
         // setup render pass 
-        if (!m_renderPass.initialize(m_vkDevice, attachments, subpasses, dependencies))
+        if (!m_renderPass.initialize(m_vkDevice, attachments, subpasses, {}))
         {
             VK_LOG_ERROR("GLTFLoader::createRenderPasses failed to initialize render pass");
             return false;

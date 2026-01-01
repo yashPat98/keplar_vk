@@ -139,7 +139,7 @@ void main(void)
         vec3 H = normalize(V + L);
 
         float dist = length(lights.position[i].xyz - vWorldPos);
-        vec3 radiance = lights.color[i].rgb / (dist * dist);
+        vec3 radiance = (lights.color[i].rgb * lights.color[i].w) / (dist * dist);
 
         float NDF = distributionGGX(N, H, roughness);
         float G = geometrySmith(N, V, L, roughness);

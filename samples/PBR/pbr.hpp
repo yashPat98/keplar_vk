@@ -28,6 +28,7 @@
 #include "graphics/frame_limiter.hpp"
 #include "graphics/camera.hpp"
 #include "graphics/gltf_model.hpp"
+#include "graphics/imgui_layer.hpp"
 #include "shader_structs.hpp"
 
 namespace keplar
@@ -66,6 +67,7 @@ namespace keplar
             bool buildCommandBuffers() noexcept;
             bool prepareScene() noexcept;
             bool updateFrame(uint32_t frameIndex) noexcept;
+            void updateUserInterface() noexcept;
 
         private:
             // per frame sync primitives
@@ -133,7 +135,13 @@ namespace keplar
             std::vector<ubo::Camera>            m_camearUniforms;
             std::vector<ubo::Light>             m_lightUniforms;
             
-            // gltf model
+            // scene resources
             GLTFModel                           m_gltfModel;
+            std::unique_ptr<ImGuiLayer>         m_imguiLayer;
+            
+            glm::vec4                           m_lightPosition;
+            glm::vec3                           m_lightColor;
+            float                               m_lightIntensity;
+
     };
 }   // namespace keplar

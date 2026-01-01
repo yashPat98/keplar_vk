@@ -143,8 +143,12 @@ namespace keplar
             return false;
         }
 
-        // prepare command buffers to submit 
-        VkCommandBuffer commandBuffer = m_commandBuffers[m_currentImageIndex].get();
+        // prepare command buffers to submit
+        std::vector<VkCommandBuffer> commandBuffers;
+        commandBuffers.emplace_back(m_commandBuffers[m_currentImageIndex].get());
+        commandBuffers.emplace_back(m_imguiLayer->recordFrame(m_currentFrameIndex));
+
+        // pipeline wait stages
         const VkPipelineStageFlags waitDstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
         // setup queue submit info
@@ -154,8 +158,8 @@ namespace keplar
         submitInfo.pWaitDstStageMask     = &waitDstStageMask;
         submitInfo.waitSemaphoreCount    = 1;
         submitInfo.pWaitSemaphores       = &imageAcquireSemaphore;
-        submitInfo.commandBufferCount    = 1;
-        submitInfo.pCommandBuffers       = &commandBuffer;
+        submitInfo.commandBufferCount    = static_cast<uint32_t>(commandBuffers.size());
+        submitInfo.pCommandBuffers       = commandBuffers.data();
         submitInfo.signalSemaphoreCount  = 1;
         submitInfo.pSignalSemaphores     = &renderCompleteSemaphore;
 
@@ -214,16 +218,10 @@ namespace keplar
             return false;
         }
 
-        static float angle = 0.0f;
-        const float radius = 5.0f;
-
-        float x = radius * cos(angle);
-        float z = radius * sin(angle);
-
         // setup light uniform data
         ubo::Light& light = m_lightUniforms[frameIndex];
-        light.position[0] = glm::vec4(x, 1.0f, z, 1.0f);
-        light.color[0]    = glm::vec4(100.0f);
+        light.position[0] = m_lightPosition;
+        light.color[0]    = glm::vec4(m_lightColor, m_lightIntensity);
         light.count       = glm::ivec4(1, 0, 0, 0);
 
         // upload to light uniform buffer
@@ -231,12 +229,6 @@ namespace keplar
         {
             VK_LOG_ERROR("PBR::updateFrame : uploadHostVisible() failed for light: %d", frameIndex);
             return false;
-        }
-
-        angle += 0.01f; 
-        if (angle >= 360.0f)
-        {
-            angle -= 360.0f;
         }
 
         return true;
@@ -309,11 +301,18 @@ namespace keplar
             if (!createSyncPrimitives()) { return; }
         }
 
+        // recreate imgui resources
+        if (m_imguiLayer)
+        {
+            m_imguiLayer->recreate();
+        }
+
         // update window dimensions 
         m_windowWidth  = width;
         m_windowHeight = height;
 
         // resume rendering
+        m_currentFrameIndex = 0;
         m_readyToRender.store(true);
     }
 
@@ -341,7 +340,7 @@ namespace keplar
     bool PBR::createMsaaTarget(const VulkanDevice& device) noexcept
     {
         // initialize msaa color and depth targets for the current swapchain
-        if (m_msaaTarget.initialize(device, *m_swapchain, VK_SAMPLE_COUNT_8_BIT))
+        if (m_msaaTarget.initialize(device, *m_swapchain, VK_SAMPLE_COUNT_4_BIT))
         {
             // success
             m_sampleCount = m_msaaTarget.getSampleCount();
@@ -653,15 +652,6 @@ namespace keplar
         colorAttachmentRef.attachment    = 0;                                       
         colorAttachmentRef.layout        = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;   
 
-        VkSubpassDependency colorDependency{};
-        colorDependency.srcSubpass       = VK_SUBPASS_EXTERNAL;
-        colorDependency.dstSubpass       = 0;
-        colorDependency.srcStageMask     = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        colorDependency.dstStageMask     = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        colorDependency.srcAccessMask    = 0;
-        colorDependency.dstAccessMask    = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-        colorDependency.dependencyFlags  = 0;
-
         // depth attachment: description, reference, subpass dependency
         VkAttachmentDescription depthAttachment{};
         depthAttachment.flags            = 0;
@@ -678,15 +668,6 @@ namespace keplar
         depthAttachmentRef.attachment    = msaaEnabled ? 2 : 1;
         depthAttachmentRef.layout        = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-        VkSubpassDependency depthDependency{};
-        depthDependency.srcSubpass       = VK_SUBPASS_EXTERNAL;
-        depthDependency.dstSubpass       = 0;
-        depthDependency.srcStageMask     = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        depthDependency.dstStageMask     = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        depthDependency.srcAccessMask    = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        depthDependency.dstAccessMask    = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-        depthDependency.dependencyFlags  = 0;
-
         // resolve attachment: description, reference (msaa only)
         VkAttachmentDescription resolveAttachment{};
         VkAttachmentReference resolveAttachmentRef{};
@@ -695,7 +676,8 @@ namespace keplar
             resolveAttachment                = colorAttachment;
             resolveAttachment.samples        = VK_SAMPLE_COUNT_1_BIT;
             resolveAttachment.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
-            resolveAttachment.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            resolveAttachment.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+            resolveAttachment.finalLayout    = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
             resolveAttachmentRef.attachment  = 1;                                       
             resolveAttachmentRef.layout      = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; 
@@ -718,12 +700,11 @@ namespace keplar
         std::vector<VkAttachmentDescription> attachments { colorAttachment }; 
         if (msaaEnabled) { attachments.emplace_back(resolveAttachment); }  
         attachments.emplace_back(depthAttachment); 
-
+        
         std::vector<VkSubpassDescription> subpasses { subpass };
-        std::vector<VkSubpassDependency> dependencies { depthDependency, colorDependency };   
 
         // setup render pass 
-        if (!m_renderPass.initialize(m_vkDevice, attachments, subpasses, dependencies))
+        if (!m_renderPass.initialize(m_vkDevice, attachments, subpasses, {}))
         {
             VK_LOG_ERROR("PBR::createRenderPasses failed to initialize render pass");
             return false;
@@ -1036,18 +1017,44 @@ namespace keplar
 
     bool PBR::prepareScene() noexcept
     {
+        auto platform = m_platform.lock();
+        auto context = m_context.lock();
+
+        // setup imgui layer
+        m_imguiLayer = std::make_unique<ImGuiLayer>(*m_swapchain);
+        m_imguiLayer->initialize(*platform, *context);
+        platform->enableImGuiEvents(true);
+        m_imguiLayer->registerWidget([this]()
+        {
+            updateUserInterface();
+        });
+
         // calculate aspect ratio of window and initialize camera
         const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
         m_camera = std::make_shared<Camera>(45.0f, aspectRatio, 0.1f, 100.0f, true);
 
         // register listeners with the platform
-        if (auto platform = m_platform.lock())
-        {
-            platform->addListener(m_camera);
-        }
+        platform->addListener(m_camera);
+
+        // setup lighting data
+        m_lightPosition  = glm::vec4(2.0f, 0.5f, 2.0f, 1.0f);
+        m_lightColor     = glm::vec3(1.0f, 1.0f, 1.0f);
+        m_lightIntensity = 100.0f;
 
         // mark ready for render
         m_readyToRender.store(true);
         return true;
     }
+
+    void PBR::updateUserInterface() noexcept
+    {
+        if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth))
+        {
+            ImGui::DragFloat4("Position##light", &m_lightPosition.x, 0.1f);
+            ImGui::ColorEdit3("Color##light", &m_lightColor.r);
+            ImGui::DragFloat("Intensity", &m_lightIntensity, 1.0f, 0.0f, 1000.0f);
+            ImGui::TreePop();
+        }
+    }
+
 }   // namespace keplar
