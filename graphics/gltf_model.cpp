@@ -829,9 +829,16 @@ namespace keplar
             // ─────────────────────────────────────────
             // texture indices
             // ─────────────────────────────────────────
-            auto getTextureIndex = [](int index) -> std::optional<uint32_t> 
+            auto getTextureIndex = [&](int index) -> std::optional<uint32_t> 
             {
-                return (index >= 0) ? std::optional<uint32_t>(static_cast<uint32_t>(index)) : std::nullopt;
+                if (index < 0 || index >= static_cast<int>(model.textures.size()))
+                    return std::nullopt;
+
+                int imageIndex = model.textures[index].source;
+                if (imageIndex < 0 || imageIndex >= m_textures.size())
+                    return std::nullopt;
+
+                return imageIndex;
             };
 
             material.mBaseColorTex          = getTextureIndex(gltfMaterial.pbrMetallicRoughness.baseColorTexture.index);
