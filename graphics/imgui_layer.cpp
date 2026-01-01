@@ -102,40 +102,25 @@ namespace keplar
         ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking;
         ImGui::Begin("Render Control Panel", nullptr, window_flags);
 
-        // sample section: Help
-        if (ImGui::TreeNodeEx("Help", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth))
-        {
-            ImGui::TextWrapped("This is the help section. It has the rounded box and arrow like demo window.");
-            ImGui::BulletText("Tip 1: Do something useful");
-            ImGui::BulletText("Tip 2: Another useful tip");
-
-            static bool show_tips = true;
-            ImGui::Checkbox("Show tips", &show_tips);
-
-            static float help_slider = 0.5f;
-            ImGui::SliderFloat("Help Slider", &help_slider, 0.0f, 1.0f);
-
-            ImGui::TreePop();
-        }
-
-        // sample section: About
-        if (ImGui::TreeNodeEx("About", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth))
-        {
-            ImGui::TextWrapped("This mimics ImGui's ShowDemoWindow style with framed rounded nodes.");
-
-            static bool enable_about = false;
-            ImGui::Checkbox("Enable About Feature", &enable_about);
-
-            static int about_option = 1;
-            ImGui::SliderInt("About Option", &about_option, 0, 10);
-
-            ImGui::TreePop();
-        }
-
         // invoke registered imgui widgets
         for (auto& widgetCallback : m_widgetCallbacks)
         {
             widgetCallback();
+        }
+
+        if (ImGui::TreeNodeEx("About", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth))
+        {
+            ImGui::TextWrapped("KEPLAR-VK : v1.0");
+            ImGui::Separator();
+            ImGui::TextWrapped("A modular Vulkan 1.4+ framework in C++17, built for real-time rendering and efficient resource management.");
+            ImGui::Separator();
+            ImGui::Text("Dependencies:");
+            ImGui::BulletText("ImGui - Immediate mode GUI");
+            ImGui::BulletText("TinyGLTF - glTF 3D model loading");
+            ImGui::BulletText("GLM - Mathematics library");
+            ImGui::Separator();
+            ImGui::TextWrapped("© 2025 Yash Patel");
+            ImGui::TreePop();
         }
 
         // end control panel window
@@ -169,8 +154,6 @@ namespace keplar
         auto& commandBuffer = m_commandBuffers[frameIndex];
         commandBuffer.reset();
         commandBuffer.begin();
-
-        m_swapchain.transitionForRendering(commandBuffer, frameIndex);
 
         VkClearValue clearValue = { 0.0f, 0.0f, 0.0f, 1.0f };
         VkRenderPassBeginInfo renderPassInfo{};
@@ -265,17 +248,6 @@ namespace keplar
         colorAttachmentRef.attachment  = 0;
         colorAttachmentRef.layout      = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-        // subpass dependency (external -> subpass 0)
-        // expect previous stage to have written the color attachment; synchronize read/write accordingly.
-        VkSubpassDependency dependency{};
-        dependency.srcSubpass          = VK_SUBPASS_EXTERNAL;
-        dependency.dstSubpass          = 0;
-        dependency.srcStageMask        = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependency.dstStageMask        = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependency.srcAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        dependency.dstAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-        dependency.dependencyFlags     = 0;
-
         // subpass description (single subpass, color-only)
         VkSubpassDescription subpass{};
         subpass.flags                   = 0;
@@ -292,10 +264,9 @@ namespace keplar
         // assemble attachments and subpasses
         std::vector<VkAttachmentDescription> attachments { colorAttachment };
         std::vector<VkSubpassDescription> subpasses { subpass };
-        std::vector<VkSubpassDependency> dependencies { dependency };
 
         // initialize render pass 
-        if (!m_renderPass.initialize(m_vkDevice, attachments, subpasses, dependencies))
+        if (!m_renderPass.initialize(m_vkDevice, attachments, subpasses, {}))
         {
             VK_LOG_ERROR("ImGuiLayer::createRenderPass failed to initialize render pass");
             return false;
