@@ -132,7 +132,7 @@ namespace keplar
             // descriptor sets and UBOs
             std::vector<VkDescriptorSet>        m_cameraDescriptorSets;
             std::vector<VkDescriptorSet>        m_lightDescriptorSets;
-            std::vector<ubo::Camera>            m_camearUniforms;
+            std::vector<ubo::Camera>            m_cameraUniforms;
             std::vector<ubo::Light>             m_lightUniforms;
             
             // scene resources

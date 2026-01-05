@@ -205,7 +205,7 @@ namespace keplar
         m_camera->update(dt);
 
         // setup camera uniform data
-        ubo::Camera& camera = m_camearUniforms[frameIndex];
+        ubo::Camera& camera = m_cameraUniforms[frameIndex];
         camera.model      = glm::mat4(1.0f);
         camera.view       = m_camera->getViewMatrix();
         camera.projection = m_camera->getProjectionMatrix();
@@ -426,7 +426,7 @@ namespace keplar
         // allocate space for vectors per swapchain image
         m_cameraUniformBuffers.resize(m_swapchainImageCount);
         m_lightUniformBuffers.resize(m_swapchainImageCount);
-        m_camearUniforms.resize(m_swapchainImageCount);
+        m_cameraUniforms.resize(m_swapchainImageCount);
         m_lightUniforms.resize(m_swapchainImageCount);
 
         // create a host-visible uniform buffer for each swapchain image

@@ -29,18 +29,19 @@ This framework provides a well structured foundation for building high performan
 
 ## 📁 Project Structure
 
-- `/core` — Core application framework (engine entry, managers)  
-- `/graphics` — Graphics abstraction layer (texture, MSAA, ImGui, camera, etc)  
-- `/vulkan` — Vulkan-specific modules (swapchain, command buffers, pipelines, etc.)  
+- `/core` — Core application framework (engine entry, managers)   
 - `/platform` — Cross-platform windowing & OS abstraction  
-- `/utils` — utilities (logging, thread pool, helpers)  
-- `/samples` — example applications built with the framework  
+- `/vulkan` — Vulkan-specific modules (swapchain, command buffers, pipelines, etc.)  
+- `/graphics` — Graphics abstraction layer (texture, MSAA, ImGui, camera, etc) 
 - `/shaders` — GLSL shader programs for Vulkan pipelines  
 - `/resources` — Assets (SPIR-V binaries, textures, models, etc.)  
+- `/utils` — utilities (logging, thread pool, helpers)  
 - `/external` — Third-party dependencies (GLM, tinygltf, ImGui) 
+- `/samples` — example applications built with the framework  
+- `/screenshots` — Sample rendering screenshots
 - `/CMakeLists.txt` — Build configuration  
-- `/LICENSE` — MIT License  
 - `/README.md` — This document  
+- `/LICENSE` — MIT License  
 
 ---
 
