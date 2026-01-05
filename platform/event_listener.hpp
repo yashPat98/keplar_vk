@@ -24,7 +24,7 @@ namespace keplar
             // mouse events
             virtual void onMouseMove(double, double) {}
             virtual void onMouseScroll(double) {}
-            virtual void onMouseButtonPressed(uint32_t) {}
-            virtual void onMouseButtonReleased(uint32_t) {}
+            virtual void onMouseButtonPressed(uint32_t, int, int) {}
+            virtual void onMouseButtonReleased(uint32_t, int, int) {}
     };
 }   // namespace keplar

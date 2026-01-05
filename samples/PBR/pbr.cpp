@@ -206,7 +206,7 @@ namespace keplar
 
         // setup camera uniform data
         ubo::Camera& camera = m_camearUniforms[frameIndex];
-        camera.model      = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -2.0f));
+        camera.model      = glm::mat4(1.0f);
         camera.view       = m_camera->getViewMatrix();
         camera.projection = m_camera->getProjectionMatrix();
         camera.position   = glm::vec4(m_camera->getPosition(), 1.0f);
@@ -1030,8 +1030,8 @@ namespace keplar
         });
 
         // calculate aspect ratio of window and initialize camera
-        const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
-        m_camera = std::make_shared<Camera>(45.0f, aspectRatio, 0.1f, 100.0f, true);
+        const float aspectRatio = float(m_windowWidth) / float(m_windowHeight);
+        m_camera = std::make_shared<Camera>(Camera::Mode::Turntable, 45.0f, aspectRatio, 0.1f, 100.0f);
 
         // register listeners with the platform
         platform->addListener(m_camera);
@@ -1048,13 +1048,114 @@ namespace keplar
 
     void PBR::updateUserInterface() noexcept
     {
+        constexpr float kLabelColWidth = 160.0f;
+
+        auto SectionHeader = [](const char* title)
+        {
+            ImGui::Spacing();
+            ImGui::TextUnformatted(title);
+            ImGui::Separator();
+        };
+
+        auto BeginTwoColTable = [](const char* id, float labelWidth) -> bool
+        {
+            if (!ImGui::BeginTable(id, 2, ImGuiTableFlags_SizingStretchProp))
+                return false;
+
+            ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, labelWidth);
+            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+            return true;
+        };
+
+        auto RowLabel = [](const char* label)
+        {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(label);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(-1.0f);
+        };
+
+        auto RowSlider = [&](const char* label, const char* id, float* value, float minV, float maxV) -> bool
+        {
+            RowLabel(label);
+            return ImGui::SliderFloat(id, value, minV, maxV);
+        };
+
+        auto RowDragFloat3 = [&](const char* label, const char* id, float* value3, float step) -> bool
+        {
+            RowLabel(label);
+            return ImGui::DragFloat3(id, value3, step);
+        };
+
+        auto RowColor3 = [&](const char* label, const char* id, float* rgb) -> bool
+        {
+            RowLabel(label);
+            return ImGui::ColorEdit3(id, rgb, ImGuiColorEditFlags_Float);
+        };
+
+        // ───────────────────────── Lighting ─────────────────────────
         if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth))
         {
-            ImGui::DragFloat4("Position##light", &m_lightPosition.x, 0.1f);
-            ImGui::ColorEdit3("Color##light", &m_lightColor.r);
-            ImGui::DragFloat("Intensity", &m_lightIntensity, 1.0f, 0.0f, 1000.0f);
+            if (BeginTwoColTable("##LightingTable", kLabelColWidth))
+            {
+                RowDragFloat3("Position", "##LightPos", &m_lightPosition.x, 0.1f);
+                RowColor3("Color", "##LightColor", &m_lightColor.r);
+                RowSlider("Intensity", "##LightIntensity", &m_lightIntensity, 0.0f, 1000.0f);
+                ImGui::EndTable();
+            }
+
+            ImGui::Spacing();
+            ImGui::TreePop();
+        }
+
+        // ───────────────────────── Camera ───────────────────────────
+        if (ImGui::TreeNodeEx("Camera", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth))
+        {
+            float fov         = m_camera->getFov();
+            float nearClip    = m_camera->getNearClip();
+            float farClip     = m_camera->getFarClip();
+            float sensitivity = m_camera->getSensitivity();
+            float scrollSpeed = m_camera->getScrollSpeed();
+            float rotDamping  = m_camera->getRotationDamping();
+            float posDamping  = m_camera->getPositionDamping();
+
+            SectionHeader("Projection");
+            if (BeginTwoColTable("##CameraProjection", kLabelColWidth))
+            {
+                if (RowSlider("Field of View (deg)", "##Fov", &fov, 30.0f, 120.0f))
+                    m_camera->setFov(fov);
+
+                bool clipChanged = false;
+                clipChanged |= RowSlider("Near Clip", "##NearClip", &nearClip, 0.001f, farClip - 0.01f);
+                clipChanged |= RowSlider("Far Clip",  "##FarClip",  &farClip,  nearClip + 0.01f, 10000.0f);
+
+                if (clipChanged)
+                    m_camera->setClipPlanes(nearClip, farClip);
+
+                ImGui::EndTable();
+            }
+
+            SectionHeader("Controls");
+            if (BeginTwoColTable("##CameraControls", kLabelColWidth))
+            {
+                if (RowSlider("Mouse Sensitivity", "##MouseSensitivity", &sensitivity, 0.01f, 1.0f))
+                    m_camera->setSensitivity(sensitivity);
+
+                if (RowSlider("Scroll Speed", "##ScrollSpeed", &scrollSpeed, 0.1f, 10.0f))
+                    m_camera->setScrollSpeed(scrollSpeed);
+
+                if (RowSlider("Rotation Damping", "##RotationDamping", &rotDamping, 0.1f, 50.0f))
+                    m_camera->setRotationDamping(rotDamping);
+
+                if (RowSlider("Position Damping", "##PositionDamping", &posDamping, 0.1f, 50.0f))
+                    m_camera->setPositionDamping(posDamping);
+
+                ImGui::EndTable();
+            }
+
+            ImGui::Spacing();
             ImGui::TreePop();
         }
     }
-
 }   // namespace keplar

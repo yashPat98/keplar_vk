@@ -8,55 +8,74 @@
 namespace 
 {
     static inline constexpr float CAMERA_DEFAULT_SPEED       = 10.0f;
-    static inline constexpr float CAMERA_DEFAULT_DAMPING     = 1000.0f;
-    static inline constexpr float CAMERA_CINEMATIC_DAMPING   = 8.0f;
     static inline constexpr float CAMERA_DEFAULT_SENSITIVITY = 0.1f;
     static inline constexpr float CAMERA_DEFAULT_SCROLLSPEED = 2.0f;
+    static inline constexpr float MAX_MOUSE_MOVE_THRESHOLD   = 50.0f;
+    static inline constexpr float CAMERA_DEFAULT_DAMPING     = 100.0f;
+    static inline constexpr float CAMERA_CINEMATIC_DAMPING   = 5.0f;
+    static inline constexpr float CAMERA_TURNTABLE_DAMPING   = 6.0f;
+
+    static inline constexpr float ORBIT_PITCH_LIMIT          = glm::radians(89.0f);
+    static inline constexpr float ARCBALL_ZOOM_FACTOR        = 0.12f;
 }
 
 namespace keplar
 {
-    Camera::Camera(float fovy, float aspect, float znear, float zfar, bool cinematic) noexcept
-        : m_fovy(fovy)
+    Camera::Camera(Mode mode, float fovy, float aspect, float znear, float zfar) noexcept
+        : m_mode(mode)
+        , m_fovy(fovy)
         , m_aspect(aspect)
         , m_znear(znear)
         , m_zfar(zfar)
-        , m_cinematicMode(cinematic)
-        , m_position(0.0f, 1.0f, 3.0f)
+        , m_width(1.0f)
+        , m_height(1.0f)
+        , m_position(0.0f, 0.0f, 3.0f)
         , m_front(0.0f, 0.0f, -1.0f)
         , m_up(0.0f, 1.0f, 0.0f)
         , m_right(1.0f, 0.0f, 0.0f)
-        , m_yaw(-90.0f)
-        , m_pitch(0.0f)
+        , m_orientation(1.0f, 0.0f, 0.0f, 0.0f)
+        , m_targetOrientation(m_orientation)
         , m_sensitivity(CAMERA_DEFAULT_SENSITIVITY)
         , m_scrollSpeed(CAMERA_DEFAULT_SCROLLSPEED)
-        , m_targetPosition(0.0f, 1.0f, 3.0f)
-        , m_targetYaw(-90.0f)
-        , m_targetPitch(0.0f)
+        , m_targetPosition(m_position)
         , m_speed(CAMERA_DEFAULT_SPEED)
-        , m_rotAcceleration(20.0f)
-        , m_rotVelocity(0.0f)
         , m_keys{}
         , m_viewMatrix(1.0f)
         , m_lastMouseX(0.0)
         , m_lastMouseY(0.0)
         , m_firstMouse(true)
+        , m_dragging(false)
+        , m_dragStartX(0.0)
+        , m_dragStartY(0.0)
+        , m_dragStartYaw(0.0f)
+        , m_dragStartPitch(0.0f)
     {
-        // set damping based on camera mode
-        if (m_cinematicMode)
+        switch (m_mode)
         {
-            m_posDamping = CAMERA_CINEMATIC_DAMPING;
-            m_rotDamping = CAMERA_CINEMATIC_DAMPING;
-        }
-        else 
-        {
-            m_posDamping = CAMERA_DEFAULT_DAMPING;
-            m_rotDamping = CAMERA_DEFAULT_DAMPING;
+            case Mode::Fps:
+                {
+                    m_posDamping = CAMERA_DEFAULT_DAMPING;
+                    m_rotDamping = CAMERA_DEFAULT_DAMPING;
+                }
+                break;
+
+            case Mode::Cinematic:
+                {
+                    m_posDamping = CAMERA_CINEMATIC_DAMPING;
+                    m_rotDamping = CAMERA_CINEMATIC_DAMPING;
+                }
+                break;
+
+            case Mode::Turntable:
+                {
+                    m_posDamping = CAMERA_TURNTABLE_DAMPING;
+                    m_rotDamping = CAMERA_TURNTABLE_DAMPING;
+                    initOrbitState();
+                }   
+                break;
         }
 
-        // initialize projection matrix and flip y-axis for Vulkan NDC
-        m_projectionMatrix = glm::perspective(glm::radians(m_fovy), m_aspect, m_znear, m_zfar);
-        m_projectionMatrix[1][1] *= -1.0f;
+        updateProjection();
         updateVectors();
     }
 
@@ -70,16 +89,17 @@ namespace keplar
 
     void Camera::onWindowResize(uint32_t width, uint32_t height) 
     {
-        if (height != 0)
-        {
-            // update aspect ratio and projection matrix 
-            m_aspect = static_cast<float>(width) / height;
-            m_projectionMatrix = glm::perspective(glm::radians(m_fovy), m_aspect, m_znear, m_zfar);
-            m_projectionMatrix[1][1] *= -1.0f;
+        if (width == 0 || height == 0)
+            return;
 
-            // reset first-mouse to avoid jump after resize
-            m_firstMouse = true;
-        }
+        // update aspect ratio and projection matrix 
+        m_width = float(width);
+        m_height = float(height);
+        m_aspect = m_width / m_height;
+        updateProjection();
+    
+        // reset first-mouse to avoid jump after resize
+        m_firstMouse = true;
     }
 
     void Camera::onKeyPressed(uint32_t key) 
@@ -102,71 +122,164 @@ namespace keplar
 
     void Camera::onMouseMove(double xpos, double ypos) 
     {
-        // skip first event to prevent sudden jump
-        if (m_firstMouse)
+        switch (m_mode)
         {
-            m_lastMouseX = xpos;
-            m_lastMouseY = ypos;
-            m_firstMouse = false;
+            case Mode::Fps:
+            case Mode::Cinematic:
+                {
+                    // skip first event to prevent sudden jump
+                    if (m_firstMouse)
+                    {
+                        m_lastMouseX = xpos;
+                        m_lastMouseY = ypos;
+                        m_firstMouse = false;
+                        return;
+                    }
+
+                    // compute mouse movement delta
+                    double dx = xpos - m_lastMouseX;
+                    double dy = ypos - m_lastMouseY; 
+
+                    // store current mouse position
+                    m_lastMouseX = xpos;
+                    m_lastMouseY = ypos;
+
+                    // discard sudden large movement
+                    if (std::abs(dx) > MAX_MOUSE_MOVE_THRESHOLD || std::abs(dy) > MAX_MOUSE_MOVE_THRESHOLD)
+                    {
+                        return;
+                    }
+
+                    // update yaw and pitch based on mouse movement and sensitivity
+                    glm::quat yaw = glm::angleAxis(glm::radians(static_cast<float>(-dx) * m_sensitivity), glm::vec3(0.0f, 1.0f, 0.0f));    
+                    glm::quat pitch = glm::angleAxis(glm::radians(static_cast<float>(dy) * m_sensitivity), glm::vec3(1.0f, 0.0f, 0.0f)); 
+                    
+                    // apply pitch then yaw to target orientation
+                    m_targetOrientation = glm::normalize(yaw * m_targetOrientation * pitch);
+                }
+                break;
+
+            case Mode::Turntable:
+                {
+                    if (!m_dragging)
+                    {
+                        m_lastMouseX = xpos;
+                        m_lastMouseY = ypos;
+                        break;
+                    }
+
+                    // compute mouse movement delta
+                    double dx = xpos - m_lastMouseX;
+                    double dy = ypos - m_lastMouseY; 
+
+                    // store current mouse position
+                    m_lastMouseX = xpos;
+                    m_lastMouseY = ypos;
+
+                    // discard sudden large movement
+                    if (std::abs(dx) > MAX_MOUSE_MOVE_THRESHOLD || std::abs(dy) > MAX_MOUSE_MOVE_THRESHOLD)
+                    {
+                        // re-anchor drag to avoid snap
+                        m_dragStartX = xpos;
+                        m_dragStartY = ypos;
+                        m_dragStartYaw = m_orbitTargetYaw;
+                        m_dragStartPitch = m_orbitTargetPitch;
+                        break;
+                    }
+
+                    // mouse delta from drag anchor
+                    dx = xpos - m_dragStartX;
+                    dy = ypos - m_dragStartY;
+
+                    // mouse delta to orbit yaw/pitch
+                    float yawDelta   = glm::radians(float(-dx) * m_sensitivity);
+                    float pitchDelta = glm::radians(float(-dy) * m_sensitivity);
+
+                    // build target orientation from orbit angles
+                    m_orbitTargetYaw = std::remainder(m_dragStartYaw + yawDelta, glm::two_pi<float>());
+                    m_orbitTargetPitch = glm::clamp(m_dragStartPitch + pitchDelta, -ORBIT_PITCH_LIMIT, ORBIT_PITCH_LIMIT);
+                    m_targetOrientation = buildOrbitOrientation(m_orbitTargetYaw, m_orbitTargetPitch);
+                }
+                break;
         }
-
-        // compute mouse movement delta
-        double dx = xpos - m_lastMouseX;
-        double dy = m_lastMouseY - ypos; 
-
-        // store current mouse position
-        m_lastMouseX = xpos;
-        m_lastMouseY = ypos;
-
-        // update target yaw and pitch based on mouse movement and sensitivity
-        m_targetYaw   += static_cast<float>(dx) * m_sensitivity;
-        m_targetPitch += static_cast<float>(dy) * m_sensitivity;
-
-        // clamp pitch to avoid gimbal lock
-        m_targetPitch = std::clamp(m_targetPitch, -89.0f, 89.0f);
     }
 
     void Camera::onMouseScroll(double yoffset) 
     {
-        // adjust field-of-view with scroll and update projection
-        m_fovy -= static_cast<float>(yoffset) * m_scrollSpeed;
-        m_fovy = std::clamp(m_fovy, 1.0f, 120.0f);
-        m_projectionMatrix = glm::perspective(glm::radians(m_fovy), m_aspect, m_znear, m_zfar);
-        m_projectionMatrix[1][1] *= -1.0f;
+        if (m_mode == Mode::Turntable)
+        {
+            // exponential scroll zoom
+            float factor = std::exp(-static_cast<float>(yoffset) * ARCBALL_ZOOM_FACTOR * m_scrollSpeed);
+            m_orbitTargetDistance = std::clamp(m_orbitTargetDistance * factor, 0.05f, 500.0f);
+        }
+        else 
+        {
+            // adjust field-of-view with scroll and update projection
+            m_fovy -= static_cast<float>(yoffset) * m_scrollSpeed;
+            m_fovy = std::clamp(m_fovy, 1.0f, 120.0f);
+            updateProjection();
+        }
+    }
+
+    void Camera::onMouseButtonPressed(uint32_t button, int xpos, int ypos) 
+    {
+        if (m_mode == Mode::Turntable && button == 0)
+        {
+            m_dragging = true;
+            m_firstMouse = false;
+            
+            // anchor drag position (screen space)
+            m_dragStartX = double(xpos);
+            m_dragStartY = double(ypos);
+            m_dragStartYaw = m_orbitTargetYaw;     
+            m_dragStartPitch = m_orbitTargetPitch;
+
+            // store current mouse position
+            m_lastMouseX = double(xpos);
+            m_lastMouseY = double(ypos);
+        }
+    }
+
+    void Camera::onMouseButtonReleased(uint32_t button, int, int) 
+    {
+        if (m_mode == Mode::Turntable && button == 0)
+        {
+            m_dragging = false;
+        }
+    }
+
+    void Camera::setFov(float fovy) noexcept
+    {
+        m_fovy = fovy;
+        updateProjection();
+    }
+    
+    void Camera::setClipPlanes(float znear, float zfar) noexcept
+    {
+        m_znear = znear;
+        m_zfar = zfar;
+        updateProjection();
     }
 
     void Camera::setAspectRatio(float aspect) noexcept
     {
-        // update aspect ratio and projection matrix
         m_aspect = aspect;
-        m_projectionMatrix = glm::perspective(glm::radians(m_fovy), m_aspect, m_znear, m_zfar);
-        m_projectionMatrix[1][1] *= -1.0f;
-    }
-
-    void Camera::setCinematicMode(bool enabled) noexcept
-    {
-        m_cinematicMode = enabled;
-        if (m_cinematicMode)
-        {
-            m_posDamping = CAMERA_CINEMATIC_DAMPING;
-            m_rotDamping = CAMERA_CINEMATIC_DAMPING;
-        }
-        else 
-        {
-            m_posDamping = CAMERA_DEFAULT_DAMPING;
-            m_rotDamping = CAMERA_DEFAULT_DAMPING;
-
-            // immediate snap and clear velocities to avoid drift
-            m_targetPosition = m_position;
-            m_targetYaw = m_yaw;
-            m_targetPitch = m_pitch;
-            m_rotVelocity = glm::vec2(0.0f);
-        }
+        updateProjection();
     }
 
     void Camera::setSpeed(float speed) noexcept
     {
         m_speed = speed;
+    }
+
+    void Camera::setSensitivity(float sensitivity) noexcept
+    {
+        m_sensitivity = std::max(0.001f, sensitivity);
+    }
+
+    void Camera::setScrollSpeed(float speed) noexcept
+    {
+        m_scrollSpeed = speed;
     }
 
     void Camera::setPositionDamping(float damping) noexcept
@@ -179,24 +292,55 @@ namespace keplar
         m_rotDamping = damping;
     }
 
+    void Camera::setOrbitTarget(const glm::vec3& target) noexcept 
+    { 
+        m_orbitTarget = target; 
+    }
+
+    void Camera::updateProjection() noexcept
+    {
+        // build perspective projection and flip Y axis for vulkan clip space
+        m_projectionMatrix = glm::perspective(glm::radians(m_fovy), m_aspect, m_znear, m_zfar);
+        m_projectionMatrix[1][1] *= -1.0f;
+    }
+
     void Camera::updateVectors() noexcept
     {
-        // recompute vector from updated yaw and pitch
-        glm::vec3 front;
-        front.x = cos(glm::radians(m_yaw)) * cos(glm::radians(m_pitch));
-        front.y = sin(glm::radians(m_pitch));
-        front.z = sin(glm::radians(m_yaw)) * cos(glm::radians(m_pitch));
+        // camera basis from orbit orientation
+        m_front = glm::normalize(m_orientation * glm::vec3(0.0f, 0.0f, -1.0f));
+        m_right = glm::normalize(m_orientation * glm::vec3(1.0f, 0.0f, 0.0f));
+        m_up    = glm::normalize(m_orientation * glm::vec3(0.0f, 1.0f, 0.0f));
 
-        m_front = glm::normalize(front);
-        m_right = glm::normalize(glm::cross(m_front, glm::vec3(0.0f, 1.0f, 0.0f)));
-        m_up    = glm::normalize(glm::cross(m_right, m_front));
+        switch (m_mode)
+        {
+            case Mode::Fps:
+            case Mode::Cinematic:
+                {
+                    // update view matrix
+                    m_viewMatrix = glm::lookAt(m_position, m_position + m_front, m_up);
+                }
+                break;
 
-        // update view matrix
-        m_viewMatrix = glm::lookAt(m_position, m_position + m_front, m_up);
+            case Mode::Turntable:
+                {
+                    // orbit position around target
+                    glm::vec3 offset = m_orientation * glm::vec3(0.0f, 0.0f, m_orbitDistance);
+                    m_position = m_orbitTarget + offset;
+
+                    // update view matrix
+                    m_viewMatrix = glm::lookAt(m_position, m_orbitTarget, m_up);
+                }
+                break;
+        }
     }
 
     void Camera::processKeyboard(float dt) noexcept
     {
+        if (m_mode == Mode::Turntable)
+        {
+            return;
+        }
+
         // compute displacement based on currently pressed keys
         glm::vec3 displacement(0.0f);
 
@@ -213,7 +357,7 @@ namespace keplar
             displacement = glm::normalize(displacement) * m_speed * dt;
         }
 
-        if (m_cinematicMode)
+        if (m_mode == Mode::Cinematic)
         {
             // smooth movement
             m_targetPosition += displacement;
@@ -230,28 +374,124 @@ namespace keplar
 
     void Camera::processMouse(float dt) noexcept
     {
-        if (m_cinematicMode)
+        switch (m_mode)
         {
-            // compute difference between target and current rotation
-            glm::vec2 delta(m_targetYaw - m_yaw, m_targetPitch - m_pitch);
+            case Mode::Fps: 
+                {
+                    // instant rotation
+                    m_orientation = m_targetOrientation;
+                }
+                break;
 
-            // compute damping and acceleration toward the target delta 
-            glm::vec2 acceleration = delta * m_rotAcceleration;
-            glm::vec2 dampedVelocity = m_rotVelocity * std::exp(-m_rotDamping * dt);
-            m_rotVelocity = dampedVelocity + acceleration * dt;
+            case Mode::Cinematic:
+                {
+                    // smoothly interpolate from current orientation to target orientation
+                    // using exponential damping factor for smooth acceleration/deceleration
 
-            // update actual rotation
-            m_yaw   += m_rotVelocity.x * dt;
-            m_pitch += m_rotVelocity.y * dt;
+                    // convert damping parameters to interpolation alpha
+                    float alpha = 1.0f - std::exp(-m_rotDamping * dt);
+                    m_orientation = glm::slerp(m_orientation, m_targetOrientation, alpha);
 
-            // clamp pitch as fail-safe
-            m_pitch = std::clamp(m_pitch, -89.0f, 89.0f);
+                    // normalize to prevent drift
+                    m_orientation = glm::normalize(m_orientation);
+                }
+                break;
+
+            case Mode::Turntable:
+                {
+                    // exponential smoothing factors
+                    const float rotAlpha  = 1.0f - std::exp(-m_rotDamping * dt);
+                    const float zoomAlpha = 1.0f - std::exp(-m_posDamping * dt);
+
+                    // orbit yaw 
+                    const float yawErr = std::remainder(m_orbitTargetYaw - m_orbitYaw, glm::two_pi<float>());
+                    m_orbitYaw = std::remainder(m_orbitYaw + yawErr * rotAlpha, glm::two_pi<float>());
+
+                    // orbit pitch
+                    m_orbitPitch += (m_orbitTargetPitch - m_orbitPitch) * rotAlpha;
+                    m_orbitPitch = glm::clamp(m_orbitPitch, -ORBIT_PITCH_LIMIT, ORBIT_PITCH_LIMIT);
+
+                    // orientation from damped angles
+                    m_orientation = buildOrbitOrientation(m_orbitYaw, m_orbitPitch);
+
+                    // orbit distance
+                    m_orbitDistance += (m_orbitTargetDistance - m_orbitDistance) * zoomAlpha;
+                    m_orbitDistance = std::clamp(m_orbitDistance, 0.05f, 500.0f);
+                }
+                break;
         }
-        else
+    }
+
+    void Camera::initOrbitState() noexcept
+    {
+        // orbit pivot (origin)
+        m_orbitTarget = glm::vec3(0.0f);
+        m_orbitDistance = glm::length(m_position - m_orbitTarget);
+        m_orbitTargetDistance = m_orbitDistance;
+
+        // derive yaw/pitch from current forward 
+        glm::vec3 forward = glm::normalize(m_orbitTarget - m_position);
+
+        // yaw around world up
+        m_orbitYaw = std::atan2(forward.x, -forward.z);
+
+        // pitch from vertical component
+        m_orbitPitch = std::asin(glm::clamp(forward.y, -1.0f, 1.0f));
+        m_orbitPitch = glm::clamp(m_orbitPitch, -ORBIT_PITCH_LIMIT, ORBIT_PITCH_LIMIT);
+
+        // initialize targets to avoid snapping
+        m_orbitTargetYaw = m_orbitYaw;
+        m_orbitTargetPitch = m_orbitPitch;
+
+         // build orbit orientation
+        m_orientation = buildOrbitOrientation(m_orbitYaw, m_orbitPitch);
+        m_targetOrientation = m_orientation;
+    }
+
+    glm::quat Camera::buildOrbitOrientation(float yaw, float pitch) const noexcept
+    {
+        // yaw about world up
+        glm::quat qYaw = glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+
+        // pitch about camera-right after yaw (turntable)
+        glm::vec3 right = qYaw * glm::vec3(1.0f, 0.0f, 0.0f);
+        glm::quat qPitch = glm::angleAxis(pitch, right);
+
+        // apply yaw then pitch; roll-free
+        return glm::normalize(qPitch * qYaw);
+    }
+
+    glm::quat Camera::safeRotationBetweenVectors(const glm::vec3& from, const glm::vec3& to) const noexcept
+    {
+        const glm::vec3 fromDir = glm::normalize(from);
+        const glm::vec3 toDir   = glm::normalize(to);
+
+        // clamped dot product of two vectors
+        const float cosTheta = glm::clamp(glm::dot(fromDir, toDir), -1.0f, 1.0f);
+
+        // nearly identical: no rotation
+        if (cosTheta > 0.999999f)
         {
-            // instant rotation
-            m_yaw   = m_targetYaw;
-            m_pitch = m_targetPitch;
+            return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
         }
+
+        // nearly opposite: pick a stable orthogonal axis
+        if (cosTheta < -0.999999f)
+        {
+            glm::vec3 axis = glm::cross(fromDir, glm::vec3(0.0f, 1.0f, 0.0f));
+            if (glm::length2(axis) < 1e-8f)
+            {
+                axis = glm::cross(fromDir, glm::vec3(1.0f, 0.0f, 0.0f));
+            }
+            axis = glm::normalize(axis);
+            return glm::angleAxis(glm::pi<float>(), axis);
+        }
+
+        // general case: quaternion from two unit vectors
+        const glm::vec3 axis = glm::cross(fromDir, toDir);
+        const float scale = std::sqrt((1.0f + cosTheta) * 2.0f);
+        const float invScale = 1.0f / scale;
+
+        return glm::normalize(glm::quat(0.5f * scale, axis.x * invScale, axis.y * invScale, axis.z * invScale));
     }
 }

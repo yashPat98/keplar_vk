@@ -11,7 +11,7 @@ namespace keplar::config
     inline constexpr int kDefaultWidth                     = 1920;
     inline constexpr int kDefaultHeight                    = 1080;
     inline constexpr bool kStartMaximized                  = true;
-    inline constexpr float kDefaultFrameRate               = 120.0f;
+    inline constexpr float kDefaultFrameRate               = 360.0f;
 
     static inline const std::filesystem::path kShaderDir   = "resources/shaders/";
     static inline const std::filesystem::path kTextureDir  = "resources/textures/";

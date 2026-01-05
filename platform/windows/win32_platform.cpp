@@ -250,14 +250,37 @@ namespace keplar
                 platform->m_eventManager.onMouseScroll(static_cast<double>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA);
                 break;
 
-            case WM_SETFOCUS:    platform->m_eventManager.onWindowFocus(true);      break;
-            case WM_KILLFOCUS:   platform->m_eventManager.onWindowFocus(false);     break;
-            case WM_LBUTTONDOWN: platform->m_eventManager.onMouseButtonPressed(0);  break;
-            case WM_LBUTTONUP:   platform->m_eventManager.onMouseButtonReleased(0); break;
-            case WM_RBUTTONDOWN: platform->m_eventManager.onMouseButtonPressed(1);  break;
-            case WM_RBUTTONUP:   platform->m_eventManager.onMouseButtonReleased(1); break;
-            case WM_MBUTTONDOWN: platform->m_eventManager.onMouseButtonPressed(2);  break;
-            case WM_MBUTTONUP:   platform->m_eventManager.onMouseButtonReleased(2); break;
+            case WM_SETFOCUS:    
+                platform->m_eventManager.onWindowFocus(true);      
+                break;
+
+            case WM_KILLFOCUS:   
+                platform->m_eventManager.onWindowFocus(false);     
+                break;
+
+            case WM_LBUTTONDOWN: 
+                platform->m_eventManager.onMouseButtonPressed(0, LOWORD(lParam), HIWORD(lParam));  
+                break;
+
+            case WM_LBUTTONUP:   
+                platform->m_eventManager.onMouseButtonReleased(0, LOWORD(lParam), HIWORD(lParam)); 
+                break;
+
+            case WM_RBUTTONDOWN: 
+                platform->m_eventManager.onMouseButtonPressed(1, LOWORD(lParam), HIWORD(lParam));  
+                break;
+
+            case WM_RBUTTONUP:   
+                platform->m_eventManager.onMouseButtonReleased(1, LOWORD(lParam), HIWORD(lParam)); 
+                break;
+
+            case WM_MBUTTONDOWN: 
+                platform->m_eventManager.onMouseButtonPressed(2, LOWORD(lParam), HIWORD(lParam));  
+                break;
+
+            case WM_MBUTTONUP:   
+                platform->m_eventManager.onMouseButtonReleased(2, LOWORD(lParam), HIWORD(lParam)); 
+                break;
 
             default:
                 break;

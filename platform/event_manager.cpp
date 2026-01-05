@@ -132,26 +132,26 @@ namespace keplar
         }
     }
 
-    void EventManager::onMouseButtonPressed(uint32_t button) const noexcept
+    void EventManager::onMouseButtonPressed(uint32_t button, int xpos, int ypos) const noexcept
     {
         auto snapshot = getListenerSnapshot();
         for (auto& weak_ptr : snapshot)
         {
             if (auto listener = weak_ptr.lock())
             {
-                listener->onMouseButtonPressed(button);
+                listener->onMouseButtonPressed(button, xpos, ypos);
             }
         }
     }
 
-    void EventManager::onMouseButtonReleased(uint32_t button) const noexcept
+    void EventManager::onMouseButtonReleased(uint32_t button, int xpos, int ypos) const noexcept
     {
         auto snapshot = getListenerSnapshot();
         for (auto& weak_ptr : snapshot)
         {
             if (auto listener = weak_ptr.lock())
             {
-                listener->onMouseButtonReleased(button);
+                listener->onMouseButtonReleased(button, xpos, ypos);
             }
         }
     }

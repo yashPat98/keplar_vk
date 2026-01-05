@@ -39,8 +39,8 @@ namespace keplar
             // mouse events
             void onMouseMove(double xpos, double ypos) const noexcept;
             void onMouseScroll(double yoffset) const noexcept;
-            void onMouseButtonPressed(uint32_t button) const noexcept;
-            void onMouseButtonReleased(uint32_t button) const noexcept;
+            void onMouseButtonPressed(uint32_t button, int xpos, int ypos) const noexcept;
+            void onMouseButtonReleased(uint32_t button, int xpos, int ypos) const noexcept;
 
         private:
             // returns a snapshot of the current listeners for safe, lock-free dispatch
