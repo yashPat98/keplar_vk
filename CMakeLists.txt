@@ -140,6 +140,27 @@ target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
 target_link_libraries(keplar PRIVATE imgui)
 
 # ───────────────────────────────────────────────
+# copy resources to target directory
+# ───────────────────────────────────────────────
+set(KEPLAR_RESOURCES_SRC "${CMAKE_SOURCE_DIR}/resources")
+set(KEPLAR_RESOURCES_DST "$<TARGET_FILE_DIR:keplar>/resources")
+set(KEPLAR_RESOURCES_STAMP "${CMAKE_BINARY_DIR}/keplar_resources.stamp")
+file(GLOB_RECURSE KEPLAR_RESOURCE_DEPS CONFIGURE_DEPENDS "${KEPLAR_RESOURCES_SRC}/*")
+
+add_custom_command(
+    OUTPUT "${KEPLAR_RESOURCES_STAMP}"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${KEPLAR_RESOURCES_SRC}"
+            "${KEPLAR_RESOURCES_DST}"
+    COMMAND ${CMAKE_COMMAND} -E touch
+            "${KEPLAR_RESOURCES_STAMP}"
+    DEPENDS ${KEPLAR_RESOURCE_DEPS}
+    COMMENT "Copying resources"
+)
+
+add_custom_target(copy_keplar_resources ALL DEPENDS "${KEPLAR_RESOURCES_STAMP}")
+
+# ───────────────────────────────────────────────
 # Visual Studio Groups
 # ───────────────────────────────────────────────
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT keplar)
