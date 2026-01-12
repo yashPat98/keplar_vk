@@ -8,6 +8,11 @@
 
 namespace keplar
 {
+    VulkanCommandBuffer::VulkanCommandBuffer() noexcept
+        : m_vkCommandBuffer(VK_NULL_HANDLE)
+    {
+    }
+
     VulkanCommandBuffer::VulkanCommandBuffer(VkCommandBuffer vkCommandBuffer) noexcept
         : m_vkCommandBuffer(vkCommandBuffer)
     {
@@ -44,6 +49,11 @@ namespace keplar
         return *this;
     }
 
+    bool VulkanCommandBuffer::begin(const VkCommandBufferBeginInfo& beginInfo) const noexcept
+    {
+        return VK_CHECK(vkBeginCommandBuffer(m_vkCommandBuffer, &beginInfo));
+    }
+
     bool VulkanCommandBuffer::begin(VkCommandBufferUsageFlags flags) const noexcept
     {
         VkCommandBufferBeginInfo vkCommandBufferBeginInfo{};
@@ -62,6 +72,13 @@ namespace keplar
     bool VulkanCommandBuffer::reset(VkCommandBufferResetFlags flags) const noexcept
     {
         return VK_CHECK(vkResetCommandBuffer(m_vkCommandBuffer, flags));
+    }
+
+    void VulkanCommandBuffer::executeCommands(const VulkanCommandBuffer& commandBuffers) noexcept
+    {
+        // execute command buffers
+        VkCommandBuffer vkCommandBuffer = commandBuffers.get();
+        vkCmdExecuteCommands(m_vkCommandBuffer, 1, &vkCommandBuffer);
     }
 
     void VulkanCommandBuffer::beginRenderPass(const VkRenderPassBeginInfo& beginInfo, VkSubpassContents contents) const noexcept

@@ -32,15 +32,25 @@ namespace keplar
             bool reset(VkCommandPoolResetFlags flags = 0) const noexcept;
             void trim(VkCommandPoolTrimFlags flags = 0) const noexcept;
 
-            // command buffer allocation
-            std::optional<VulkanCommandBuffer> allocateBuffer(VkCommandBufferLevel level) const noexcept;
-            std::vector<VulkanCommandBuffer> allocateBuffers(uint32_t count, VkCommandBufferLevel level) const noexcept;
-            void releaseBuffers(const std::vector<VulkanCommandBuffer>& commandBuffers) const noexcept;
-            void releaseBuffer(const VulkanCommandBuffer& commandBuffer) const noexcept;
+            // single allocation (ergonomic)
+            VulkanCommandBuffer allocatePrimary() const noexcept;
+            VulkanCommandBuffer allocateSecondary() const noexcept;
+
+            // batch allocation (efficient)
+            std::vector<VulkanCommandBuffer> allocatePrimaries(uint32_t count) const;
+            std::vector<VulkanCommandBuffer> allocateSecondaries(uint32_t count) const;
+
+            // free command buffers
+            void deallocate(VulkanCommandBuffer& commandBuffer) const noexcept;
+            void deallocate(std::vector<VulkanCommandBuffer>& commandBuffers) const;
 
             // accessors
             VkCommandPool get() const noexcept { return m_vkCommandPool; }
             std::optional<uint32_t> getQueueFamilyIndex() const noexcept { return m_queueFamilyIndex; }
+
+        private:
+            VulkanCommandBuffer allocateInternal(VkCommandBufferLevel level) const noexcept;
+            std::vector<VulkanCommandBuffer> allocateInternal(uint32_t count, VkCommandBufferLevel level) const;
 
         private:
             VkDevice m_vkDevice;

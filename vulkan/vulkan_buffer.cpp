@@ -207,16 +207,13 @@ namespace keplar
         }
 
         // allocate one-time submit command buffer from pool for host to device copy
-        auto commandBufferOpt = commandPool.allocateBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-        if (!commandBufferOpt)
+        auto commandBuffer = commandPool.allocatePrimary();
+        if (!commandBuffer.isValid())
         {
             vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
             vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
             return false;
         }
-
-        // safely unwrap the optional
-        auto& commandBuffer = *commandBufferOpt;
 
         // begin recording commands
         if (!commandBuffer.begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT))
@@ -270,7 +267,7 @@ namespace keplar
 
         // cleanup staging resources 
         copyFence.wait();
-        commandPool.releaseBuffer(commandBuffer);
+        commandPool.deallocate(commandBuffer);
         vkFreeMemory(m_vkDevice, vkDeviceMemoryStaging, nullptr);
         vkDestroyBuffer(m_vkDevice, vkBufferStaging, nullptr);
 

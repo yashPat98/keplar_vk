@@ -29,11 +29,11 @@ namespace keplar
             ~ImGuiLayer();
 
             // lifetime management
-            bool initialize(const Platform& platform, const VulkanContext& context) noexcept;
-            void recreate() noexcept;
+            bool initialize(const Platform& platform, const VulkanContext& context, uint32_t maxFramesInFlight) noexcept;
+            void recreate(uint32_t maxFramesInFlight) noexcept;
 
             // usage
-            VkCommandBuffer recordFrame(uint32_t frameIndex) noexcept;
+            VkCommandBuffer recordFrame(uint32_t frameIndex, uint32_t imageIndex) noexcept;
             void registerWidget(std::function<void()> callback);
 
         private:
@@ -48,6 +48,7 @@ namespace keplar
         private:
             // core vulkan dependencies
             const VulkanSwapchain&              m_swapchain;
+            uint32_t                            m_maxFramesInFlight;
 
             // imgui info and vulkan resources
             ImGui_ImplVulkan_InitInfo           m_initInfo;

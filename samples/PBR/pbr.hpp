@@ -64,7 +64,8 @@ namespace keplar
             bool createGraphicsPipeline() noexcept;
             bool createFramebuffers() noexcept;
             bool createSyncPrimitives() noexcept;
-            bool buildCommandBuffers() noexcept;
+            bool recordSceneCommandBuffers() noexcept;
+            bool recordFrameCommandBuffer(uint32_t frameIndex, uint32_t imageIndex) noexcept;
             bool prepareScene() noexcept;
             bool updateFrame(uint32_t frameIndex) noexcept;
             void updateUserInterface() noexcept;
@@ -109,10 +110,12 @@ namespace keplar
 
             // command buffers and synchronization
             VulkanCommandPool                   m_commandPool;
-            std::vector<VulkanCommandBuffer>    m_commandBuffers;
+            std::vector<VulkanCommandBuffer>    m_primaryCommandBuffers;
+            std::vector<VulkanCommandBuffer>    m_secondaryCommandBuffer;
             VulkanRenderPass                    m_renderPass;
             std::vector<VulkanFramebuffer>      m_framebuffers;
             std::vector<FrameSyncPrimitives>    m_frameSyncPrimitives;
+            std::vector<VkFence>                m_imagesInFlightFences;
             FrameLimiter                        m_frameLimiter;
             
             // shaders and pipeline

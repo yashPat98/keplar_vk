@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <optional>
 #include "vulkan/vulkan_config.hpp"
 
 namespace keplar
@@ -14,8 +15,8 @@ namespace keplar
     class VulkanCommandBuffer final
     {
         public:
-            // creation and destruction
-            VulkanCommandBuffer() = delete;
+            // creation and destruction (non owning handle, allow null state)
+            VulkanCommandBuffer() noexcept;
             ~VulkanCommandBuffer() = default;
 
             // copy semantics
@@ -27,9 +28,11 @@ namespace keplar
             VulkanCommandBuffer& operator=(VulkanCommandBuffer&&) noexcept; 
 
             // command recording
+            bool begin(const VkCommandBufferBeginInfo& beginInfo) const noexcept;
             bool begin(VkCommandBufferUsageFlags flags = 0) const noexcept;
             bool end() const noexcept;
             bool reset(VkCommandBufferResetFlags flags = 0) const noexcept;
+            void executeCommands(const VulkanCommandBuffer& commandBuffers) noexcept;
 
             // render pass helpers
             void beginRenderPass(const VkRenderPassBeginInfo& beginInfo, VkSubpassContents contents) const noexcept;
@@ -51,6 +54,7 @@ namespace keplar
 
             // accessor
             VkCommandBuffer get() const noexcept { return m_vkCommandBuffer; }
+            bool isValid() const noexcept { return m_vkCommandBuffer != VK_NULL_HANDLE; }
 
         private:
             // only command pool can construct

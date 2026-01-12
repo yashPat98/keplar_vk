@@ -41,7 +41,8 @@ namespace keplar
         // destroy vulkan resources 
         GLTFModel::destroySharedResources(m_vkDevice);
         m_swapchain.reset();
-        m_commandPool.releaseBuffers(m_commandBuffers);
+        m_commandPool.deallocate(m_primaryCommandBuffers);
+        m_commandPool.deallocate(m_secondaryCommandBuffer);
     }
 
     bool GLTFLoader::initialize(std::weak_ptr<Platform> platform, std::weak_ptr<VulkanContext> context) noexcept
@@ -91,7 +92,7 @@ namespace keplar
         if (!createGraphicsPipeline())      { return false; }
         if (!createFramebuffers())          { return false; }
         if (!createSyncPrimitives())        { return false; }
-        if (!buildCommandBuffers())         { return false; }
+        if (!recordSceneCommandBuffers())   { return false; }
         if (!prepareScene())                { return false; }
 
         VK_LOG_INFO("GLTFLoader::initialize successful");
@@ -110,7 +111,7 @@ namespace keplar
         // wait on the fence for this frame to ensure gpu finished work from last time
         // this prevents cpu from submitting commands for the same frame while gpu is still using it
         auto& frameSync = m_frameSyncPrimitives[m_currentFrameIndex];
-        if (!frameSync.mInFlightFence.wait() || !frameSync.mInFlightFence.reset())
+        if (!frameSync.mInFlightFence.wait())
         {
             return false;
         }
@@ -137,14 +138,41 @@ namespace keplar
             return false;
         }
 
+        // wait if this swapchain image is still in flight
+        VkFence& imageFence = m_imagesInFlightFences[m_currentImageIndex];
+        if (imageFence != VK_NULL_HANDLE)
+        {
+            vkResult = vkWaitForFences(m_vkDevice, 1, &imageFence, VK_TRUE, UINT64_MAX);
+            if (vkResult != VK_SUCCESS)
+            {
+                VK_LOG_ERROR("vkWaitForFences failed : %s (code: %d)", string_VkResult(vkResult), vkResult);
+                return false;
+            }
+        }
+
+        // mark this image as now owned by current frame fence
+        imageFence = inFlightFence;
+
+        // reset current frame fence before submitting new gpu work
+        if (!frameSync.mInFlightFence.reset())
+        {
+            return false;
+        }
+
         // update per-frame data
         if (!updateFrame(m_currentFrameIndex))
         {
             return false;
         }
 
+        // record primary buffer for this frame targeting the acquired swapchain framebuffer
+        if (!recordFrameCommandBuffer(m_currentFrameIndex, m_currentImageIndex))
+        {    
+            return false;
+        }
+
         // prepare command buffers to submit 
-        VkCommandBuffer commandBuffer = m_commandBuffers[m_currentImageIndex].get();
+        VkCommandBuffer commandBuffer = m_primaryCommandBuffers[m_currentFrameIndex].get();
         const VkPipelineStageFlags waitDstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
         // setup queue submit info
@@ -248,26 +276,30 @@ namespace keplar
         // update swapchain handle and image count
         m_vkSwapchainKHR      = m_swapchain->get();
         m_swapchainImageCount = m_swapchain->getImageCount();
-        m_maxFramesInFlight   = glm::min(3u, m_swapchainImageCount);
+        m_maxFramesInFlight   = glm::min(3u, m_swapchainImageCount-1);
+        m_maxFramesInFlight   = glm::max(1u, m_maxFramesInFlight);
+
+        // reset per-image fence ownership for the new swapchain images
+        m_imagesInFlightFences.assign(m_swapchainImageCount, VK_NULL_HANDLE);
 
         // teardown all dependent resources (framebuffers, pipeline, renderpass, command buffers)
         for (auto& framebuffer : m_framebuffers)
         {
             framebuffer.destroy();
         }
+
         m_graphicsPipeline.destroy();
         m_renderPass.destroy();
         m_msaaTarget.destroy();
-        m_commandPool.releaseBuffers(m_commandBuffers);
-        m_commandBuffers.clear();
+        m_commandPool.deallocate(m_primaryCommandBuffers);
 
         // recreate all dependent resources
-        if (!createMsaaTarget(*device)) { return; }
-        if (!createCommandBuffers())    { return; }
-        if (!createRenderPasses())      { return; }
-        if (!createGraphicsPipeline())  { return; }
-        if (!createFramebuffers())      { return; }
-        if (!buildCommandBuffers())     { return; }
+        if (!createMsaaTarget(*device))   { return; }
+        if (!createCommandBuffers())      { return; }
+        if (!createRenderPasses())        { return; }
+        if (!createGraphicsPipeline())    { return; }
+        if (!createFramebuffers())        { return; }
+        if (!recordSceneCommandBuffers()) { return; }
 
         // recreate per-frame sync primitives if max frames-in-flight changed
         if (m_maxFramesInFlight != previousMaxFramesInFlight)
@@ -280,7 +312,10 @@ namespace keplar
                 frameSync.mImageAvailableSemaphore.destroy();
             }
             
-            if (!createSyncPrimitives()) { return; }
+            if (!createSyncPrimitives()) 
+            { 
+                return; 
+            }
         }
 
         // update window dimensions 
@@ -307,7 +342,9 @@ namespace keplar
         // vulkan spec suggests max frames in flight should be less than swapchain image count
         // to prevent CPU stalling while waiting for an image to become available for rendering.
         // setting an upper limit of 3 balances throughput and avoids stalls.
-        m_maxFramesInFlight = glm::min(3u, m_swapchainImageCount);
+        m_maxFramesInFlight = glm::min(3u, m_swapchainImageCount-1);
+        m_maxFramesInFlight = glm::max(1u, m_maxFramesInFlight);
+
         VK_LOG_INFO("GLTFLoader::createSwapchain : swapchain created successfully (max frames in flight: %d)", m_maxFramesInFlight);
         return true;
     }
@@ -355,11 +392,19 @@ namespace keplar
 
     bool GLTFLoader::createCommandBuffers() noexcept
     {
-        // allocate primary command buffers per swapchain
-        m_commandBuffers = m_commandPool.allocateBuffers(m_swapchainImageCount, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-        if (m_commandBuffers.empty())
+        // allocate primary command buffers for each frame in flight
+        m_primaryCommandBuffers = m_commandPool.allocatePrimaries(m_maxFramesInFlight);
+        if (m_primaryCommandBuffers.empty())
         {
-            VK_LOG_ERROR("GLTFLoader::createCommandBuffers failed to allocate command buffers.");
+            VK_LOG_ERROR("GLTFLoader::createCommandBuffers failed to allocate primary command buffers.");
+            return false;
+        }
+
+        // allocate secondary command buffers to cache stable draw workloads
+        m_secondaryCommandBuffer = m_commandPool.allocateSecondaries(m_maxFramesInFlight);
+        if (m_secondaryCommandBuffer.empty())
+        {
+            VK_LOG_ERROR("GLTFLoader::createCommandBuffers failed to allocate secondary command buffers.");
             return false;
         }
 
@@ -398,15 +443,15 @@ namespace keplar
 
     bool GLTFLoader::createUniformBuffers(const VulkanDevice& device) noexcept
     {
-        // allocate space for vectors per swapchain image
-        m_uniformBuffers.resize(m_swapchainImageCount);
-        m_uboFrameData.resize(m_swapchainImageCount);
+        // allocate space for vectors per frame 
+        m_uniformBuffers.resize(m_maxFramesInFlight);
+        m_uboFrameData.resize(m_maxFramesInFlight);
 
         // calculate required buffer size for uniform data
         VkDeviceSize bufferSize = sizeof(ubo::FrameData);
 
-        // create a host-visible uniform buffer for each swapchain image
-        for (size_t i = 0; i < m_swapchainImageCount; i++)
+        // create a host-visible uniform buffer for each frame
+        for (size_t i = 0; i < m_maxFramesInFlight; i++)
         {
             VkBufferCreateInfo bufferCreateInfo{};
             bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -480,7 +525,7 @@ namespace keplar
     {
         // descriptor set requirements
         DescriptorRequirements requirements{};
-        requirements.mMaxSets = m_swapchainImageCount;
+        requirements.mMaxSets = m_maxFramesInFlight;
         requirements.mUniformCount = 1;
 
         // add requirements
@@ -500,19 +545,19 @@ namespace keplar
 
     bool GLTFLoader::createDescriptorSets() noexcept
     {
-        // create identical descriptor set layouts for each swapchain image
-        std::vector<VkDescriptorSetLayout> layouts(m_swapchainImageCount, m_descriptorSetLayout.get());
+        // create identical descriptor set layouts for each frame
+        std::vector<VkDescriptorSetLayout> layouts(m_maxFramesInFlight, m_descriptorSetLayout.get());
 
         // descriptor set allocation info
         VkDescriptorSetAllocateInfo descriptorSetAllocateInfo{};
         descriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         descriptorSetAllocateInfo.pNext = nullptr;
         descriptorSetAllocateInfo.descriptorPool = m_descriptorPool.get();
-        descriptorSetAllocateInfo.descriptorSetCount = m_swapchainImageCount;
+        descriptorSetAllocateInfo.descriptorSetCount = m_maxFramesInFlight;
         descriptorSetAllocateInfo.pSetLayouts = layouts.data();
 
         // allocate descriptor sets
-        m_descriptorSets.resize(m_swapchainImageCount);
+        m_descriptorSets.resize(m_maxFramesInFlight);
         VkResult vkResult = vkAllocateDescriptorSets(m_vkDevice, &descriptorSetAllocateInfo, m_descriptorSets.data());
         if (vkResult != VK_SUCCESS)
         {
@@ -520,8 +565,8 @@ namespace keplar
             return false;
         }
 
-        // for each swapchain image, bind its corresponding uniform buffer to the descriptor set
-        for (uint32_t i = 0; i < m_swapchainImageCount; i++)
+        // for each frame, bind its corresponding uniform buffer to the descriptor set
+        for (uint32_t i = 0; i < m_maxFramesInFlight; i++)
         {
             // info for uniform buffer binding
             VkDescriptorBufferInfo bufferInfo{};
@@ -868,12 +913,71 @@ namespace keplar
             }
         }
 
+        // image in flight fences to track which fence currently owns swapchain image
+        m_imagesInFlightFences.assign(m_swapchainImageCount, VK_NULL_HANDLE);
         VK_LOG_DEBUG("GLTFLoader::createSyncPrimitives successful");
         return true;
     }
 
-    bool GLTFLoader::buildCommandBuffers() noexcept
+    bool GLTFLoader::recordSceneCommandBuffers() noexcept
     {
+        // secondary command buffer inherts render pass state from the primary
+        VkCommandBufferInheritanceInfo inheritanceInfo{};
+        inheritanceInfo.sType                = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+        inheritanceInfo.pNext                = nullptr;
+        inheritanceInfo.renderPass           = m_renderPass.get();
+        inheritanceInfo.subpass              = 0;
+        inheritanceInfo.framebuffer          = VK_NULL_HANDLE;
+        inheritanceInfo.occlusionQueryEnable = VK_FALSE;
+        inheritanceInfo.queryFlags           = 0;
+        inheritanceInfo.pipelineStatistics   = 0;
+
+        // secondary command buffer begin info
+        VkCommandBufferBeginInfo beginInfo{};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.pNext = nullptr;
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+        beginInfo.pInheritanceInfo = &inheritanceInfo;
+
+        for (uint32_t i = 0; i < m_maxFramesInFlight; ++i)
+        {
+            // reset and begin recording into secondary
+            if (!m_secondaryCommandBuffer[i].reset() || !m_secondaryCommandBuffer[i].begin(beginInfo))
+            {
+                return false;
+            }
+
+            // record graphics pipeline state, resource bindings, and draw commands for this frame
+            m_secondaryCommandBuffer[i].bindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
+            m_secondaryCommandBuffer[i].bindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.getLayout(), 0, 1, &m_descriptorSets[i]);
+            m_gltfModel.render(m_secondaryCommandBuffer[i].get(), m_graphicsPipeline.getLayout());
+
+            // finalize the command buffer
+            if (!m_secondaryCommandBuffer[i].end())
+            {
+                return false;
+            }
+        }
+
+        VK_LOG_DEBUG("GLTFLoader::recordSceneCommandBuffers successful");
+        return true;
+    }
+
+    bool GLTFLoader::recordFrameCommandBuffer(uint32_t frameIndex, uint32_t imageIndex) noexcept
+    {
+        // begin primary recording
+        VkCommandBufferBeginInfo beginInfo{};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.pNext = nullptr;
+        beginInfo.flags = 0;
+
+        // reset and then begin recording into the command buffer
+        auto& commandBuffer = m_primaryCommandBuffers[frameIndex];
+        if (!commandBuffer.reset() || !commandBuffer.begin(beginInfo))
+        {
+            return false;
+        }
+
         // check if msaa is enabled
         const bool msaaEnabled = m_sampleCount > VK_SAMPLE_COUNT_1_BIT;
 
@@ -881,64 +985,45 @@ namespace keplar
         VkClearValue clearValues[3]{};
         if (msaaEnabled)
         {
-            clearValues[0].color = { 0.5f, 0.5f, 0.5f, 1.0f };
-            clearValues[1].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+            clearValues[0].color        = { 0.0f, 0.0f, 0.0f, 1.0f };
+            clearValues[1].color        = { 0.0f, 0.0f, 0.0f, 1.0f };
             clearValues[2].depthStencil = { 1.0f, 0 };
         }
         else 
         {
-            clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+            clearValues[0].color        = { 0.0f, 0.0f, 0.0f, 1.0f };
             clearValues[1].depthStencil = { 1.0f, 0 };
         }
 
         // render pass begin info (framebuffer updated per command buffer)
         VkRenderPassBeginInfo renderPassBeginInfo{};
-        renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassBeginInfo.pNext = nullptr;
-        renderPassBeginInfo.renderPass = m_renderPass.get();
+        renderPassBeginInfo.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassBeginInfo.pNext             = nullptr;
+        renderPassBeginInfo.framebuffer       = m_framebuffers[imageIndex].get();
+        renderPassBeginInfo.renderPass        = m_renderPass.get();
         renderPassBeginInfo.renderArea.offset = {0, 0};
         renderPassBeginInfo.renderArea.extent = m_swapchain->getExtent();
-        renderPassBeginInfo.clearValueCount = msaaEnabled ? 3 : 2;
-        renderPassBeginInfo.pClearValues = clearValues;
+        renderPassBeginInfo.clearValueCount   = msaaEnabled ? 3 : 2;
+        renderPassBeginInfo.pClearValues      = clearValues;
+        
+        // begin render pass for this frame
+        commandBuffer.beginRenderPass(renderPassBeginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
-        // record commands per swapchain image
-        for (uint32_t i = 0; i < m_swapchainImageCount; ++i)
-        {
-            // reset and then begin recording into the command buffer
-            if (!m_commandBuffers[i].reset() || !m_commandBuffers[i].begin())
-            {
-                return false;
-            }
+        // execute the cached secondary command buffer
+        commandBuffer.executeCommands(m_secondaryCommandBuffer[frameIndex]);
 
-            // begin render pass for this frame
-            renderPassBeginInfo.framebuffer = m_framebuffers[i].get();
-            m_commandBuffers[i].beginRenderPass(renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        // end current render pass
+        commandBuffer.endRenderPass();
 
-            // record graphics pipeline state, resource bindings, and draw commands for this frame
-            m_commandBuffers[i].bindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
-            m_commandBuffers[i].bindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.getLayout(), 0, 1, &m_descriptorSets[i]);
-
-            m_gltfModel.render(m_commandBuffers[i].get(), m_graphicsPipeline.getLayout());
-
-            // end current render pass
-            m_commandBuffers[i].endRenderPass();
-
-            // finalize the command buffer
-            if (!m_commandBuffers[i].end())
-            {
-                return false;
-            }
-        }
-
-        VK_LOG_DEBUG("GLTFLoader::buildCommandBuffers successful");
-        return true;
+        // finalize the command buffer
+        return commandBuffer.end();
     }
 
     bool GLTFLoader::prepareScene() noexcept
     {
         // calculate aspect ratio of window and initialize camera
         const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
-        m_camera = std::make_shared<Camera>(45.0f, aspectRatio, 0.1f, 100.0f, true);
+        m_camera = std::make_shared<Camera>(Camera::Mode::Cinematic, 45.0f, aspectRatio, 0.1f, 100.0f);
 
         // register listeners with the platform
         if (auto platform = m_platform.lock())

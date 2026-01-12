@@ -98,9 +98,69 @@ namespace keplar
         vkTrimCommandPool(m_vkDevice, m_vkCommandPool, flags);
     }
 
-    std::optional<VulkanCommandBuffer> VulkanCommandPool::allocateBuffer(VkCommandBufferLevel level) const noexcept
+    VulkanCommandBuffer VulkanCommandPool::allocatePrimary() const noexcept
     {
-        // set up command buffer allocation info for a single command buffer
+        return allocateInternal(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    }
+
+    VulkanCommandBuffer VulkanCommandPool::allocateSecondary() const noexcept
+    {
+        return allocateInternal(VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+    }
+
+    std::vector<VulkanCommandBuffer> VulkanCommandPool::allocatePrimaries(uint32_t count) const 
+    {
+        return allocateInternal(count, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    }
+
+    std::vector<VulkanCommandBuffer> VulkanCommandPool::allocateSecondaries(uint32_t count) const 
+    {
+        return allocateInternal(count, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+    }
+
+    void VulkanCommandPool::deallocate(VulkanCommandBuffer& commandBuffer) const noexcept
+    {
+        auto vkCommandBuffer = commandBuffer.get();
+        if (vkCommandBuffer != VK_NULL_HANDLE)
+        {
+            vkFreeCommandBuffers(m_vkDevice, m_vkCommandPool, 1, &vkCommandBuffer);
+            commandBuffer = VulkanCommandBuffer{};
+            VK_LOG_DEBUG("VulkanCommandPool::deallocate : command buffer freed successfully"); 
+        }
+    }
+
+    void VulkanCommandPool::deallocate(std::vector<VulkanCommandBuffer>& commandBuffers) const 
+    {
+        // validate input
+        if (commandBuffers.empty())
+        {
+            VK_LOG_WARN("VulkanCommandPool::deallocate : no command buffers passed");
+            return;
+        }
+
+        std::vector<VkCommandBuffer> vkCommandBuffers;
+        vkCommandBuffers.reserve(commandBuffers.size());
+        for (auto& buffer : commandBuffers)
+        {
+            if (auto handle = buffer.get(); handle != VK_NULL_HANDLE)
+            {
+                vkCommandBuffers.emplace_back(handle);
+            }
+        }
+
+        // free command buffers from the pool
+        if (!vkCommandBuffers.empty())
+        {
+            vkFreeCommandBuffers(m_vkDevice, m_vkCommandPool, static_cast<uint32_t>(vkCommandBuffers.size()), vkCommandBuffers.data());
+        }
+
+        commandBuffers.clear();
+        VK_LOG_DEBUG("VulkanCommandPool::deallocate : command buffers freed successfully : %zu", vkCommandBuffers.size()); 
+    }
+
+    VulkanCommandBuffer VulkanCommandPool::allocateInternal(VkCommandBufferLevel level) const noexcept
+    {
+        // set up command buffer allocation info
         VkCommandBufferAllocateInfo vkCommandBufferAllocateInfo{};
         vkCommandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         vkCommandBufferAllocateInfo.pNext = nullptr;
@@ -110,19 +170,27 @@ namespace keplar
 
         // create command buffer
         VkCommandBuffer vkCommandBuffer = VK_NULL_HANDLE;
-        VkResult vkResult = vkAllocateCommandBuffers(m_vkDevice, &vkCommandBufferAllocateInfo, &vkCommandBuffer);
+        const VkResult vkResult = vkAllocateCommandBuffers(m_vkDevice, &vkCommandBufferAllocateInfo, &vkCommandBuffer);
         if (vkResult != VK_SUCCESS)
         {
             VK_LOG_FATAL("vkAllocateCommandBuffers failed to allocate command buffer : %s (code: %d)", string_VkResult(vkResult), vkResult);
-            return std::nullopt;
+            return {};
         }
 
-        VK_LOG_DEBUG("command buffer allocated from pool successfully");
-        return VulkanCommandBuffer(vkCommandBuffer);
+        // create command buffer lightweight wrapper 
+        VK_LOG_DEBUG("VulkanCommandPool::allocateInternal : single command buffer allocated successfully");
+        return VulkanCommandBuffer{ vkCommandBuffer };
     }
 
-    std::vector<VulkanCommandBuffer> VulkanCommandPool::allocateBuffers(uint32_t count, VkCommandBufferLevel level) const noexcept
+    std::vector<VulkanCommandBuffer> VulkanCommandPool::allocateInternal(uint32_t count, VkCommandBufferLevel level) const 
     {
+        // validate input
+        if (count == 0)
+        {
+            VK_LOG_WARN("VulkanCommandPool::allocateInternal : count is invalid");
+            return {};
+        }
+
         // set up command buffer allocation info 
         VkCommandBufferAllocateInfo vkCommandBufferAllocateInfo{};
         vkCommandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -143,41 +211,12 @@ namespace keplar
         // create command buffer lightweight wrappers and track for destruction
         std::vector<VulkanCommandBuffer> commandBuffers;
         commandBuffers.reserve(count);
-        for (const auto& elm : vkCommandBuffers)
+        for (VkCommandBuffer elm : vkCommandBuffers)
         {
             commandBuffers.emplace_back(VulkanCommandBuffer(elm));
         }
 
-        VK_LOG_DEBUG("command buffers allocated from pool successfully");
+        VK_LOG_DEBUG("VulkanCommandPool::allocateInternal : command buffers allocated from pool successfully");
         return commandBuffers;
-    }
-
-    void VulkanCommandPool::releaseBuffers(const std::vector<VulkanCommandBuffer>& commandBuffers) const noexcept
-    {
-        // validate input
-        if (commandBuffers.empty())
-        {
-            VK_LOG_WARN("VulkanCommandPool::releaseBuffers : no command buffers passed");
-            return;
-        }
-
-        // extract raw VkCommandBuffer handles
-        std::vector<VkCommandBuffer> vkCommandBuffers;
-        vkCommandBuffers.reserve(commandBuffers.size());
-        for (const auto& buffer : commandBuffers)
-        {
-            vkCommandBuffers.emplace_back(buffer.get());
-        }
-
-        // free command buffers from the vulkan command pool
-        vkFreeCommandBuffers(m_vkDevice, m_vkCommandPool, static_cast<uint32_t>(vkCommandBuffers.size()), vkCommandBuffers.data());
-        VK_LOG_DEBUG("command buffers freed successfully : %zu", vkCommandBuffers.size()); 
-    }
-
-    void VulkanCommandPool::releaseBuffer(const VulkanCommandBuffer& commandBuffer) const noexcept
-    {
-        auto vkCommandBuffer = commandBuffer.get();
-        vkFreeCommandBuffers(m_vkDevice, m_vkCommandPool, 1, &vkCommandBuffer);
-        VK_LOG_DEBUG("command buffers freed successfully"); 
     }
 }   // namespace keplar

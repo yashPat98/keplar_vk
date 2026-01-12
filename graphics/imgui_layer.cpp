@@ -23,6 +23,7 @@ namespace keplar
 {
     ImGuiLayer::ImGuiLayer(const VulkanSwapchain& swapchain) noexcept
         : m_swapchain(swapchain)
+        , m_maxFramesInFlight(0)
         , m_vkDevice(VK_NULL_HANDLE)
         , m_vkInstance(VK_NULL_HANDLE)
         , m_initInfo{}
@@ -32,7 +33,7 @@ namespace keplar
     ImGuiLayer::~ImGuiLayer()
     {
         // destroy vulkan resources 
-        m_commandPool.releaseBuffers(m_commandBuffers);
+        m_commandPool.deallocate(m_commandBuffers);
 
         // shutdown imgui backend
         ImGui_ImplVulkan_Shutdown();
@@ -40,7 +41,7 @@ namespace keplar
         ImGui::DestroyContext();
     }
 
-    bool ImGuiLayer::initialize(const Platform& platform, const VulkanContext& context) noexcept
+    bool ImGuiLayer::initialize(const Platform& platform, const VulkanContext& context, uint32_t maxFramesInFlight) noexcept
     { 
         // acquire shared access to instance and device  
         const auto instance = context.getInstance().lock();
@@ -52,11 +53,12 @@ namespace keplar
         }
  
         // store vulkan handles and swapchain info
-        m_vkInstance  = instance->get();
-        m_vkDevice    = device->getDevice();
+        m_vkInstance = instance->get();
+        m_vkDevice = device->getDevice();
         m_queueFamily = device->getQueueFamilyIndices().mGraphicsFamily.value();
-        m_imageCount  = m_swapchain.getImageCount();
+        m_imageCount = m_swapchain.getImageCount();
         m_imageExtent = m_swapchain.getExtent();
+        m_maxFramesInFlight = maxFramesInFlight;
 
         // initialize vulkan resources for imgui
         if (!createResourcePool())                       { return false; }
@@ -69,17 +71,17 @@ namespace keplar
         return true;
     }
     
-    void ImGuiLayer::recreate() noexcept
+    void ImGuiLayer::recreate(uint32_t maxFramesInFlight) noexcept
     {
         // teardown vulkan resources
         m_framebuffers.clear();
         m_renderPass.destroy();
-        m_commandPool.releaseBuffers(m_commandBuffers);
-        m_commandBuffers.clear();
+        m_commandPool.deallocate(m_commandBuffers);
 
         // store vulkan handles and swapchain info
         m_imageCount  = m_swapchain.getImageCount();
         m_imageExtent = m_swapchain.getExtent();
+        m_maxFramesInFlight = maxFramesInFlight;
 
         // recreate vulkan resources
         if (!createCommandBuffers())  { return; }
@@ -127,7 +129,7 @@ namespace keplar
         ImGui::End();
     }
 
-    VkCommandBuffer ImGuiLayer::recordFrame(uint32_t frameIndex) noexcept
+    VkCommandBuffer ImGuiLayer::recordFrame(uint32_t frameIndex, uint32_t imageIndex) noexcept
     {
         // validate frame index
         if (frameIndex >= m_commandBuffers.size())
@@ -159,7 +161,7 @@ namespace keplar
         VkRenderPassBeginInfo renderPassInfo{};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         renderPassInfo.renderPass = m_renderPass.get();
-        renderPassInfo.framebuffer = m_framebuffers[frameIndex].get();
+        renderPassInfo.framebuffer = m_framebuffers[imageIndex].get();
         renderPassInfo.renderArea.offset = {0, 0};
         renderPassInfo.renderArea.extent = m_imageExtent;
         renderPassInfo.clearValueCount = 1;
@@ -219,7 +221,7 @@ namespace keplar
     bool ImGuiLayer::createCommandBuffers() noexcept
     {
         // allocate command buffer per swapchain image
-        m_commandBuffers = m_commandPool.allocateBuffers(m_imageCount, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        m_commandBuffers = m_commandPool.allocatePrimaries(m_maxFramesInFlight);
         if (m_commandBuffers.empty())
         {
             VK_LOG_ERROR("ImGuiLayer::createCommandBuffers : failed to allocate command buffers.");
