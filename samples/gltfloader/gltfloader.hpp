@@ -25,7 +25,6 @@
 #include "vulkan/vulkan_samplers.hpp"
 
 #include "graphics/msaa_target.hpp"
-#include "graphics/frame_limiter.hpp"
 #include "graphics/camera.hpp"
 #include "graphics/gltf_model.hpp"
 #include "shader_structs.hpp"
@@ -41,7 +40,8 @@ namespace keplar
 
             // core renderer interface: initialize, update, render, configure
             virtual bool initialize(std::weak_ptr<Platform> platform, std::weak_ptr<VulkanContext> context) noexcept override;
-            virtual bool renderFrame() noexcept override;
+            virtual void update(float dt) noexcept override;
+            virtual bool render() noexcept override;
             virtual void configureVulkan(VulkanContextConfig& config) noexcept override;
 
             // handle window and user input events
@@ -66,7 +66,7 @@ namespace keplar
             bool recordSceneCommandBuffers() noexcept;
             bool recordFrameCommandBuffer(uint32_t frameIndex, uint32_t imageIndex) noexcept;
             bool prepareScene() noexcept;
-            bool updateFrame(uint32_t frameIndex) noexcept;
+            bool updatePerFrame(uint32_t frameIndex) noexcept;
 
         private:
             // per frame sync primitives
@@ -114,7 +114,6 @@ namespace keplar
             std::vector<VulkanFramebuffer>      m_framebuffers;
             std::vector<FrameSyncPrimitives>    m_frameSyncPrimitives;
             std::vector<VkFence>                m_imagesInFlightFences;
-            FrameLimiter                        m_frameLimiter;
             
             // shaders and pipeline
             VulkanShader                        m_vertexShader;

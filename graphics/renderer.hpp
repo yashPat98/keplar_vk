@@ -15,9 +15,10 @@ namespace keplar
         public:
             virtual ~Renderer() = default;
 
-            // core per-frame renderer interface: initialize resources, update state, and submit frames
+            // core renderer interface: initialize resources, update state, and submit frames
             virtual bool initialize(std::weak_ptr<Platform> platform, std::weak_ptr<VulkanContext> context) noexcept = 0;
-            virtual bool renderFrame() noexcept = 0;
+            virtual void update(float dt) noexcept = 0;
+            virtual bool render() noexcept = 0;
 
             // configure vulkan instance, layers, extensions, features, and queue preferences
             virtual void configureVulkan(VulkanContextConfig& /* config */) noexcept {}

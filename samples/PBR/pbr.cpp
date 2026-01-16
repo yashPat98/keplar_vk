@@ -99,12 +99,18 @@ namespace keplar
         return true;
     }
 
-    bool PBR::renderFrame() noexcept
+    void PBR::update(float dt) noexcept
+    {
+        // update scene state
+        m_camera->update(dt);
+    }
+
+    bool PBR::render() noexcept
     {
         // skip frame if renderer is not ready
         if (!m_readyToRender.load())
         {
-            VK_LOG_DEBUG("PBR::beginFrame skipped: renderer not ready");
+            VK_LOG_DEBUG("PBR::render skipped: renderer not ready");
             return true;
         }
 
@@ -156,8 +162,8 @@ namespace keplar
             return false;
         }
 
-        // update per-frame data
-        if (!updateFrame(m_currentFrameIndex))
+        // update per-frame resources
+        if (!updatePerFrame(m_currentFrameIndex))
         {
             return false;
         }
@@ -218,45 +224,8 @@ namespace keplar
             return false;
         }
 
-        // advance frame index and apply frame pacing
+        // advance to the next frame sync object (cycling through available frames in flight)
         m_currentFrameIndex = (m_currentFrameIndex + 1) % m_maxFramesInFlight;
-        m_frameLimiter.waitForNextFrame();
-        return true;
-    }
-
-    bool PBR::updateFrame(uint32_t frameIndex) noexcept
-    {
-        // update camera 
-        float dt = m_frameLimiter.getDeltaTime();
-        m_camera->update(dt);
-
-        // setup camera uniform data
-        ubo::Camera& camera = m_cameraUniforms[frameIndex];
-        camera.model      = glm::mat4(1.0f);
-        camera.view       = m_camera->getViewMatrix();
-        camera.projection = m_camera->getProjectionMatrix();
-        camera.position   = glm::vec4(m_camera->getPosition(), 1.0f);
-
-        // upload to camera uniform buffer
-        if (!m_cameraUniformBuffers[frameIndex].uploadHostVisible(&camera, sizeof(camera)))
-        {
-            VK_LOG_ERROR("PBR::updateFrame : uploadHostVisible() failed for camera: %d", frameIndex);
-            return false;
-        }
-
-        // setup light uniform data
-        ubo::Light& light = m_lightUniforms[frameIndex];
-        light.position[0] = m_lightPosition;
-        light.color[0]    = glm::vec4(m_lightColor, m_lightIntensity);
-        light.count       = glm::ivec4(1, 0, 0, 0);
-
-        // upload to light uniform buffer
-        if (!m_lightUniformBuffers[frameIndex].uploadHostVisible(&light, sizeof(light)))
-        {
-            VK_LOG_ERROR("PBR::updateFrame : uploadHostVisible() failed for light: %d", frameIndex);
-            return false;
-        }
-
         return true;
     }
 
@@ -1128,6 +1097,38 @@ namespace keplar
 
         // mark ready for render
         m_readyToRender.store(true);
+        return true;
+    }
+
+    bool PBR::updatePerFrame(uint32_t frameIndex) noexcept
+    {
+        // setup camera uniform data
+        ubo::Camera& camera = m_cameraUniforms[frameIndex];
+        camera.model      = glm::mat4(1.0f);
+        camera.view       = m_camera->getViewMatrix();
+        camera.projection = m_camera->getProjectionMatrix();
+        camera.position   = glm::vec4(m_camera->getPosition(), 1.0f);
+
+        // upload to camera uniform buffer
+        if (!m_cameraUniformBuffers[frameIndex].uploadHostVisible(&camera, sizeof(camera)))
+        {
+            VK_LOG_ERROR("PBR::updatePerFrame : uploadHostVisible() failed for camera: %d", frameIndex);
+            return false;
+        }
+
+        // setup light uniform data
+        ubo::Light& light = m_lightUniforms[frameIndex];
+        light.position[0] = m_lightPosition;
+        light.color[0]    = glm::vec4(m_lightColor, m_lightIntensity);
+        light.count       = glm::ivec4(1, 0, 0, 0);
+
+        // upload to light uniform buffer
+        if (!m_lightUniformBuffers[frameIndex].uploadHostVisible(&light, sizeof(light)))
+        {
+            VK_LOG_ERROR("PBR::updatePerFrame : uploadHostVisible() failed for light: %d", frameIndex);
+            return false;
+        }
+
         return true;
     }
 

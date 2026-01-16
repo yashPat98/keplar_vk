@@ -21,6 +21,8 @@ namespace keplar
         , m_vulkanContext(nullptr)
         , m_renderer(nullptr)
     {
+        // set frame rate
+        m_framePacer.setTargetFps(keplar::config::kDefaultFrameRate);
     }
 
     KeplarApp::~KeplarApp()
@@ -54,11 +56,13 @@ namespace keplar
             // process platform events
             m_platform->pollEvents();
 
-            // update and submit current frame for rendering
-            if (!m_renderer->renderFrame()) 
-            {
+            // update state and submit the current frame
+            m_renderer->update(m_time.tick());
+            if (!m_renderer->render()) 
                 return EXIT_FAILURE; 
-            }
+            
+            // frame pacing
+            m_framePacer.wait();
         }
 
         return EXIT_SUCCESS;

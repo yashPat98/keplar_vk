@@ -21,7 +21,6 @@ namespace keplar
         , m_currentImageIndex(0)
         , m_currentFrameIndex(0)
         , m_readyToRender(false)
-        , m_frameLimiter()
     {
     }
 
@@ -93,12 +92,17 @@ namespace keplar
         return true;
     }
 
-    bool Triangle::renderFrame() noexcept
+    void Triangle::update(float /* dt */) noexcept
+    {
+        // update scene state
+    }
+
+    bool Triangle::render() noexcept
     {
         // skip frame if renderer is not ready
         if (!m_readyToRender.load())
         {
-            VK_LOG_DEBUG("Triangle::beginFrame skipped: renderer not ready");
+            VK_LOG_DEBUG("Triangle::render skipped: renderer not ready");
             return true;
         }
 
@@ -109,9 +113,6 @@ namespace keplar
         {
             return false;
         }
-
-        // wait on cpu to maintain target frame rate
-        m_frameLimiter.waitForNextFrame();
 
         // frame-specific semaphores and fence
         const auto imageAcquireSemaphore    = frameSync.mImageAvailableSemaphore.get();
@@ -153,8 +154,8 @@ namespace keplar
             return false;
         }
 
-        // update per-frame data
-        if (!updateFrame(m_currentFrameIndex))
+        // update per-frame resources
+        if (!updatePerFrame(m_currentFrameIndex))
         {
             return false;
         }
@@ -213,28 +214,6 @@ namespace keplar
 
         // advance to the next frame sync object (cycling through available frames in flight)
         m_currentFrameIndex = (m_currentFrameIndex + 1) % m_maxFramesInFlight;
-        return true;
-    }
-
-    bool Triangle::updateFrame(uint32_t frameIndex) noexcept
-    {
-        // calculate aspect ratio
-        const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
-
-        // setup uniform data
-        ubo::FrameData& frameData = m_uboFrameData[frameIndex];
-        frameData.model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
-        frameData.view = glm::mat4(1.0f);
-        frameData.projection = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
-        frameData.projection[1][1] *= -1.0f;
-
-        // upload to uniform buffer
-        if (!m_uniformBuffers[frameIndex].uploadHostVisible(&frameData, sizeof(frameData)))
-        {
-            VK_LOG_ERROR("Triangle::updateFrame failed for frame: %d", frameIndex);
-            return false;
-        }
-
         return true;
     }
 
@@ -1053,5 +1032,27 @@ namespace keplar
 
         // finalize the command buffer
         return commandBuffer.end();
+    }
+    
+    bool Triangle::updatePerFrame(uint32_t frameIndex) noexcept
+    {
+        // calculate aspect ratio
+        const float aspectRatio = static_cast<float>(m_windowWidth) / static_cast<float>(m_windowHeight);
+
+        // setup uniform data
+        ubo::FrameData& frameData = m_uboFrameData[frameIndex];
+        frameData.model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
+        frameData.view = glm::mat4(1.0f);
+        frameData.projection = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.0f);
+        frameData.projection[1][1] *= -1.0f;
+
+        // upload to uniform buffer
+        if (!m_uniformBuffers[frameIndex].uploadHostVisible(&frameData, sizeof(frameData)))
+        {
+            VK_LOG_ERROR("Triangle::updatePerFrame failed for frame: %d", frameIndex);
+            return false;
+        }
+
+        return true;
     }
 }   // namespace keplar

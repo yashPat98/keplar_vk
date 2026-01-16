@@ -5,6 +5,8 @@
 #pragma once
 
 #include <memory>
+#include "utils/time.hpp"
+#include "utils/frame_pacer.hpp"
 
 namespace keplar
 {
@@ -41,5 +43,7 @@ namespace keplar
             std::shared_ptr<Platform>       m_platform;
             std::shared_ptr<VulkanContext>  m_vulkanContext;
             std::shared_ptr<Renderer>       m_renderer;
+            Time                            m_time;
+            FramePacer                      m_framePacer;
     };
 }   // namespace keplar

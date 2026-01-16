@@ -10,7 +10,7 @@ namespace
     static inline constexpr float CAMERA_DEFAULT_SPEED       = 10.0f;
     static inline constexpr float CAMERA_DEFAULT_SENSITIVITY = 0.1f;
     static inline constexpr float CAMERA_DEFAULT_SCROLLSPEED = 2.0f;
-    static inline constexpr float MAX_MOUSE_MOVE_THRESHOLD   = 50.0f;
+    static inline constexpr float MAX_MOUSE_MOVE_THRESHOLD   = 300.0f;
     static inline constexpr float CAMERA_DEFAULT_DAMPING     = 100.0f;
     static inline constexpr float CAMERA_CINEMATIC_DAMPING   = 5.0f;
     static inline constexpr float CAMERA_TURNTABLE_DAMPING   = 6.0f;

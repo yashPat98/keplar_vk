@@ -99,12 +99,18 @@ namespace keplar
         return true;
     }
 
-    bool TextureSample::renderFrame() noexcept
+    void TextureSample::update(float dt) noexcept
+    {
+        // update scene state
+        m_camera->update(dt);
+    }
+
+    bool TextureSample::render() noexcept
     {
         // skip frame if renderer is not ready
         if (!m_readyToRender.load())
         {
-            VK_LOG_DEBUG("TextureSample::beginFrame skipped: renderer not ready");
+            VK_LOG_DEBUG("TextureSample::render skipped: renderer not ready");
             return true;
         }
 
@@ -115,9 +121,6 @@ namespace keplar
         {
             return false;
         }
-
-        // wait on cpu to maintain target frame rate
-        m_frameLimiter.waitForNextFrame();
 
         // frame-specific semaphores and fence
         const auto imageAcquireSemaphore    = frameSync.mImageAvailableSemaphore.get();
@@ -159,8 +162,8 @@ namespace keplar
             return false;
         }
 
-        // update per-frame data
-        if (!updateFrame(m_currentFrameIndex))
+        // update per-frame resources
+        if (!updatePerFrame(m_currentFrameIndex))
         {
             return false;
         }
@@ -219,28 +222,6 @@ namespace keplar
 
         // advance to the next frame sync object (cycling through available frames in flight)
         m_currentFrameIndex = (m_currentFrameIndex + 1) % m_maxFramesInFlight;
-        return true;
-    }
-
-    bool TextureSample::updateFrame(uint32_t frameIndex) noexcept
-    {
-        // update camera 
-        float dt = m_frameLimiter.getDeltaTime();
-        m_camera->update(dt);
-
-        // setup uniform data
-        ubo::FrameData& frameData = m_uboFrameData[frameIndex];
-        frameData.model      = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
-        frameData.view       = m_camera->getViewMatrix();
-        frameData.projection = m_camera->getProjectionMatrix();
-
-        // upload to uniform buffer
-        if (!m_uniformBuffers[frameIndex].uploadHostVisible(&frameData, sizeof(frameData)))
-        {
-            VK_LOG_ERROR("TextureSample::updateFrame failed for frame: %d", frameIndex);
-            return false;
-        }
-
         return true;
     }
 
@@ -1139,6 +1120,24 @@ namespace keplar
 
         // mark ready for render
         m_readyToRender.store(true);
+        return true;
+    }
+
+    bool TextureSample::updatePerFrame(uint32_t frameIndex) noexcept
+    {
+        // setup uniform data
+        ubo::FrameData& frameData = m_uboFrameData[frameIndex];
+        frameData.model      = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f));
+        frameData.view       = m_camera->getViewMatrix();
+        frameData.projection = m_camera->getProjectionMatrix();
+
+        // upload to uniform buffer
+        if (!m_uniformBuffers[frameIndex].uploadHostVisible(&frameData, sizeof(frameData)))
+        {
+            VK_LOG_ERROR("TextureSample::updatePerFrame failed for frame: %d", frameIndex);
+            return false;
+        }
+
         return true;
     }
 }   // namespace keplar
